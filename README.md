@@ -11,7 +11,3 @@ tbd
 - automatic wallet creation
 - fetch gas balance of the server's address
 - withdraw from the server's balance
-
-## API Keys
-
-Please check `./utils/evm/ChainConfig` for the appropriate block scanner websites.
