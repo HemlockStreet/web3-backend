@@ -1,0 +1,193 @@
+{
+  "mainnet": {
+    "id": 1,
+    "name": "Ethereum",
+    "network": "homestead",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "ens": {
+      "address": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 14353601
+    },
+    "rpc": "https://cloudflare-eth.com",
+    "explorer": {
+      "name": "Etherscan",
+      "url": "https://etherscan.io",
+      "api": "https://api.etherscan.io/api"
+    }
+  },
+  "goerli": {
+    "id": 5,
+    "name": "Goerli",
+    "network": "goerli",
+    "nativeCurrency": {
+      "name": "Goerli Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "ens": {
+      "address": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 6507670
+    },
+    "testnet": true,
+    "rpc": "https://rpc.ankr.com/eth_goerli",
+    "explorer": {
+      "name": "Etherscan",
+      "url": "https://goerli.etherscan.io",
+      "api": "https://api-goerli.etherscan.io/api"
+    }
+  },
+  "sepolia": {
+    "id": 11155111,
+    "name": "Sepolia",
+    "network": "sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 751532
+    },
+    "testnet": true,
+    "rpc": "https://rpc.sepolia.org",
+    "explorer": {
+      "name": "Etherscan",
+      "url": "https://sepolia.etherscan.io",
+      "api": "https://api-sepolia.etherscan.io/api"
+    }
+  },
+  "optimism": {
+    "id": 10,
+    "name": "Optimism",
+    "network": "optimism",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 4286263
+    },
+    "rpc": "https://mainnet.optimism.io",
+    "explorer": {
+      "name": "Etherscan",
+      "url": "https://optimistic.etherscan.io",
+      "api": "https://api-optimistic.etherscan.io/api"
+    }
+  },
+  "optimismGoerli": {
+    "id": 420,
+    "name": "Optimism Goerli",
+    "network": "optimism-goerli",
+    "nativeCurrency": {
+      "name": "Goerli Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 49461
+    },
+    "testnet": true,
+    "rpc": "https://goerli.optimism.io",
+    "explorer": {
+      "name": "Etherscan",
+      "url": "https://goerli-optimism.etherscan.io",
+      "api": "https://api-goerli-optimism.etherscan.io/api"
+    }
+  },
+  "polygon": {
+    "id": 137,
+    "name": "Polygon",
+    "network": "matic",
+    "nativeCurrency": {
+      "name": "MATIC",
+      "symbol": "MATIC",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 25770160
+    },
+    "rpc": "https://polygon-rpc.com",
+    "explorer": {
+      "name": "PolygonScan",
+      "url": "https://polygonscan.com",
+      "api": "https://api.polygonscan.com/api"
+    }
+  },
+  "polygonMumbai": {
+    "id": 80001,
+    "name": "Polygon Mumbai",
+    "network": "maticmum",
+    "nativeCurrency": {
+      "name": "MATIC",
+      "symbol": "MATIC",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 25444704
+    },
+    "testnet": true,
+    "rpc": "https://matic-mumbai.chainstacklabs.com",
+    "explorer": {
+      "name": "PolygonScan",
+      "url": "https://mumbai.polygonscan.com",
+      "api": "https://api-testnet.polygonscan.com/api"
+    }
+  },
+  "arbitrum": {
+    "id": 42161,
+    "name": "Arbitrum One",
+    "network": "arbitrum",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 7654707
+    },
+    "rpc": "https://arb1.arbitrum.io/rpc",
+    "explorer": {
+      "name": "Arbiscan",
+      "url": "https://arbiscan.io",
+      "api": "https://api.arbiscan.io/api"
+    }
+  },
+  "arbitrumGoerli": {
+    "id": 421613,
+    "name": "Arbitrum Goerli",
+    "network": "arbitrum-goerli",
+    "nativeCurrency": {
+      "name": "Arbitrum Goerli Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "multicall": {
+      "address": "0xca11bde05977b3631167028862be2a173976ca11",
+      "blockCreated": 88114
+    },
+    "testnet": true,
+    "rpc": "https://goerli-rollup.arbitrum.io/rpc",
+    "explorer": {
+      "name": "Arbiscan",
+      "url": "https://goerli.arbiscan.io",
+      "api": "https://api-goerli.arbiscan.io/api"
+    }
+  }
+}
