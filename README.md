@@ -4,7 +4,7 @@ This is a boilerplate for quickly creating a web3-enabled api and frontend that 
 
 ## Video
 
-tbd
+[![thumbnail](https://img.youtube.com/vi/5LzqW79M9Ug/0.jpg)](https://www.youtube.com/watch?v=5LzqW79M9Ug)
 
 ## Features
 
