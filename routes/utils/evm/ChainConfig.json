@@ -133,7 +133,7 @@
     "name": "Polygon Mumbai",
     "network": "maticmum",
     "nativeCurrency": {
-      "name": "MATIC",
+      "name": "Mumbai MATIC",
       "symbol": "MATIC",
       "decimals": 18
     },
@@ -154,7 +154,7 @@
     "name": "Arbitrum One",
     "network": "arbitrum",
     "nativeCurrency": {
-      "name": "Ether",
+      "name": "Arbitrum Ether",
       "symbol": "ETH",
       "decimals": 18
     },

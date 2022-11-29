@@ -1,7 +1,6 @@
 package-lock.json
 
-utils/WalletConfig.json
-utils/reference/
+routes/utils/evm/WalletConfig.json
 
 logs
 coverage
