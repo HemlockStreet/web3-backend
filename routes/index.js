@@ -1,46 +1,50 @@
 const ethers = require('ethers');
+
 const Evm = require('./utils/evm');
 const handleError = require('./utils/errorHandler');
+const Auth = require('./utils/auth');
 
-const sig = require('./utils/auth/signatures');
-const encrypt = require('./utils/auth/encryption');
+const msg = (info) => {
+  return { info };
+};
 
 module.exports = (app) => {
   let evm = new Evm();
+  let auth = new Auth();
 
   app.route('/').get((req, res) => {
-    try {
-      const serverAddress = evm.wallet.address;
-      const availableNetworks = evm.network.list;
-      if (!serverAddress) throw new Error('!serverAddress');
-      if (!availableNetworks) throw new Error('!availableNetworks');
-      res.status(200).json({ serverAddress, availableNetworks });
-    } catch (err) {
-      handleError(res, 'home', 'GET', err);
-    }
+    const serverAddress = evm.wallet.address;
+    const availableNetworks = evm.network.list;
+    if (!serverAddress) throw new Error('!serverAddress');
+    if (!availableNetworks) throw new Error('!availableNetworks');
+    res.status(200).json({ serverAddress, availableNetworks });
   });
 
   app
-    .route('/auth')
-    .get((req, res) => res.send(req.cookies))
-    .post(async (req, res) => {
-      const mtd = 'POST';
+    .route('/signature')
+    .post(evm.validateSignature, async (req, res) =>
+      res.status(200).json(msg('Valid Signature'))
+    );
+
+  app
+    .route('/login')
+    .post(evm.validateSignature, async (req, res) => {
       try {
-        const { user } = req.body;
-        const { address, signature, message } = user;
-        await sig.validate(message, signature, address);
+        const { ip, user } = req;
+        const { accessToken, refreshToken } = auth.tokenize(user, ip);
 
-        const now = new Date();
-        const plain = address + signature + message + now;
-        const hash = await encrypted.hash(plain, 16);
-        res.cookie('auth', hash, { httpOnly: true });
-
-        const data = { info: 'Cookie Established!' };
-        res.status(200).json(data);
+        /// FIX M<E
+        res
+          .cookie('accessToken', accessToken, auth.opts)
+          .cookie('refreshToken', refreshToken, auth.opts)
+          .status(200)
+          .json(msg('Logged In'));
       } catch (err) {
-        handleError(res, rte, mtd, err);
+        handleError(res, 'login', 'POST', err);
       }
-    });
+    })
+    .patch((req, res) => auth.edit(req, res))
+    .delete((req, res) => auth.del(req, res));
 
   /**
    * @param alias the object key, chainId, name, or network nickname
@@ -54,34 +58,25 @@ module.exports = (app) => {
     .get(async (req, res) => {
       try {
         const { alias } = req.params;
-
         const value = await evm.network.balance(alias);
         const currency = evm.network.info(alias).nativeCurrency.name;
-
-        const data = { info: `My balance is ${value} ${currency}.` };
-        res.status(200).json(data);
+        res.status(200).json(msg(`My balance is ${value} ${currency}.`));
       } catch (err) {
         handleError(res, 'balance', 'GET', err);
       }
     })
-    .post(async (req, res) => {
+    .post(auth.validate, async (req, res) => {
       try {
         const { alias } = req.params;
-        const { to, amount } = req.body;
-
+        const signer = evm.network.signer(alias);
+        const explorer = evm.network.explorer(alias);
+        const { amount, to } = req.body;
         const value = ethers.utils.parseEther(amount);
 
-        const signer = evm.network.signer(alias);
         const tx = await signer.sendTransaction({ to, value });
         const receipt = await tx.wait();
-        console.log(tx);
-        console.log(receipt);
 
-        const explorer = evm.network.explorer(alias);
-        const data = {
-          info: `${explorer}/tx/${receipt.transactionHash}`,
-        };
-        res.status(200).json(data);
+        res.status(200).json(msg(`${explorer}/tx/${receipt.transactionHash}`));
       } catch (err) {
         handleError(res, 'balance', 'POST', err);
       }
