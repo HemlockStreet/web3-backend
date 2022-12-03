@@ -10,11 +10,6 @@ const app = express()
   .use(bodyParser.json())
   .use(cookieParser());
 
-if (process.argv[2] !== 'dev') {
-  app.use(express.static('./client/build'));
-  app.get('/', (req, res) => res.sendFile('./client/build/index.html'));
-}
-
 route(app);
 
 const port = process.env.PORT ? process.env.PORT : 8080;
