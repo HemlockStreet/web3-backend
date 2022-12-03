@@ -1,7 +1,8 @@
 package-lock.json
 
 routes/utils/evm/WalletConfig.json
-routes/utils/auth/TokenStore.json
+routes/utils/auth/Tokens.json
+routes/utils/auth/Sessions.json
 
 logs
 coverage

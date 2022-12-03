@@ -1,50 +1,63 @@
 const ethers = require('ethers');
+const validate = require('./utils/validation');
 
 const Evm = require('./utils/evm');
 const handleError = require('./utils/errorHandler');
 const Auth = require('./utils/auth');
 
-const msg = (info) => {
-  return { info };
+const pass = (res) => res.status(200).json({ info: 'ok' });
+
+const cookieOpts = {
+  httpOnly: true,
+  // secure: true,
+  // domain: 'mywebsite.com'
 };
 
 module.exports = (app) => {
   let evm = new Evm();
   let auth = new Auth();
 
-  app.route('/').get((req, res) => {
-    const serverAddress = evm.wallet.address;
-    const availableNetworks = evm.network.list;
-    if (!serverAddress) throw new Error('!serverAddress');
-    if (!availableNetworks) throw new Error('!availableNetworks');
-    res.status(200).json({ serverAddress, availableNetworks });
-  });
-
-  app
-    .route('/signature')
-    .post(evm.validateSignature, async (req, res) =>
-      res.status(200).json(msg('Valid Signature'))
-    );
+  app.get('/sitrep', (req, res) =>
+    res.status(200).json({
+      deployer: evm.wallet.address,
+      networks: evm.network.list,
+    })
+  );
 
   app
     .route('/login')
-    .post(evm.validateSignature, async (req, res) => {
-      try {
-        const { ip, user } = req;
-        const { accessToken, refreshToken } = auth.tokenize(user, ip);
+    .post(validate.signature, async (req, res) => {
+      const { atkn, rtkn } = auth.tkn.generate(req.userData);
+      auth.sesh.add(rtkn);
 
-        /// FIX M<E
-        res
-          .cookie('accessToken', accessToken, auth.opts)
-          .cookie('refreshToken', refreshToken, auth.opts)
-          .status(200)
-          .json(msg('Logged In'));
-      } catch (err) {
-        handleError(res, 'login', 'POST', err);
-      }
+      res.cookie('atkn', atkn, cookieOpts);
+      res.cookie('rtkn', rtkn, cookieOpts);
+      pass(res);
     })
-    .patch((req, res) => auth.edit(req, res))
-    .delete((req, res) => auth.del(req, res));
+    .patch(validate.refreshToken, (req, res) => {
+      auth.sesh.rm(req.cookies.rtkn);
+
+      const { atkn, rtkn } = auth.tkn.generate(req.userData);
+      auth.sesh.add(rtkn);
+
+      res.cookie('atkn', atkn, cookieOpts);
+      res.cookie('rtkn', rtkn, cookieOpts);
+      pass(res);
+    })
+    .delete(validate.refreshToken, (req, res) => {
+      const { rtkn } = req.cookies;
+      if (!auth.sesh.all.includes(rtkn))
+        return res
+          .status(403)
+          .json({ info: 'validation.refreshToken - invalid' });
+      auth.sesh.rm(rtkn);
+
+      auth.sesh.clean();
+
+      res.clearCookie('rtkn');
+      res.clearCookie('atkn');
+      pass(res);
+    });
 
   /**
    * @param alias the object key, chainId, name, or network nickname
@@ -65,7 +78,7 @@ module.exports = (app) => {
         handleError(res, 'balance', 'GET', err);
       }
     })
-    .post(auth.validate, async (req, res) => {
+    .post(validate.accessToken, async (req, res) => {
       try {
         const { alias } = req.params;
         const signer = evm.network.signer(alias);

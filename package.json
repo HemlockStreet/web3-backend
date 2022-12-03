@@ -1,8 +1,11 @@
 {
   "name": "web3-backend",
   "scripts": {
-    "dev": "nodemon ./app.js",
-    "start": "node ./app.js"
+    "setup": "npm i && cd client && npm i",
+    "dev:server": "nodemon app.js dev",
+    "dev:client": "cd client && yarn start",
+    "dev": "concurrently --kill-others-on-fail \"yarn dev:server\" \"yarn dev:client\"",
+    "start": "cd client && yarn build && cd .. && node ./app.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.0",
@@ -15,6 +18,12 @@
     "jsonwebtoken": "^8.5.1"
   },
   "devDependencies": {
-    "concurrently": "^7.5.0"
+    "concurrently": "^7.6.0",
+    "nodemon": "^2.0.20"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "*/*.json"
+    ]
   }
 }
