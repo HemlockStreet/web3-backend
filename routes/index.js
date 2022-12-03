@@ -32,7 +32,9 @@ module.exports = (app) => {
 
       res.cookie('atkn', atkn, cookieOpts);
       res.cookie('rtkn', rtkn, cookieOpts);
-      pass(res);
+      const iat = auth.tkn.decode(atkn).iat;
+
+      res.status(200).json({ iat });
     })
     .patch(validate.refreshToken, (req, res) => {
       auth.sesh.rm(req.cookies.rtkn);
@@ -42,7 +44,9 @@ module.exports = (app) => {
 
       res.cookie('atkn', atkn, cookieOpts);
       res.cookie('rtkn', rtkn, cookieOpts);
-      pass(res);
+      const iat = auth.tkn.decode(atkn).iat;
+
+      res.status(200).json({ iat });
     })
     .delete(validate.refreshToken, (req, res) => {
       const { rtkn } = req.cookies;
