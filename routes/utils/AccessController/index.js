@@ -53,9 +53,19 @@ module.exports = class AccessController {
     next();
   }
 
+  chValidation(req, res, next) {
+    const { message, address } = req.body.user;
+    const decoded = this.utils.verify('atkn', message);
+    if (!decoded || decoded.ip !== req.ip || decoded.address !== address)
+      return rejection('challenge', 'invalid', res);
+    next();
+  }
+
   // GET /login
-  metadata(req, res) {
-    res.status(200).json(req.userData);
+  issueChallenge(req, res) {
+    res.status(200).json({
+      challenge: this.utils.challengeString(req.body.user.address, req.ip),
+    });
   }
 
   // POST/PATCH /login

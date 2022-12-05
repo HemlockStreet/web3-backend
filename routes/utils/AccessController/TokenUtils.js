@@ -12,9 +12,13 @@ module.exports = class TokenUtils extends LocalData {
       console.log({ egressed: this.data });
   }
 
+  randomString() {
+    return crypto.randomBytes(64).toString('hex');
+  }
+
   reset() {
-    const access = crypto.randomBytes(64).toString('hex');
-    const refresh = crypto.randomBytes(64).toString('hex');
+    const access = this.randomString();
+    const refresh = this.randomString();
     this.data = { access, refresh };
     super.ingress(this.data);
     if (this.opts.testing.TokenUtils) console.log({ ingressed: this.data });
@@ -26,6 +30,13 @@ module.exports = class TokenUtils extends LocalData {
     this.opts = opts;
     this.update(true);
     if (!this.data.access || !this.data.refresh) this.reset();
+  }
+
+  challengeString(address, ip) {
+    const contents = this.randomString();
+    return jwt.sign({ contents, address, ip }, this.data.access, {
+      expiresIn: '5m',
+    });
   }
 
   generate(data) {

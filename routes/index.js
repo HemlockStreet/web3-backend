@@ -12,16 +12,15 @@ module.exports = (app) => {
   app.route('/sitrep').get(evm.sitrep);
 
   /**
-   * @dev this process is imperfect. The server just accepts valid signatures as login
-   * credentials. TODO: add a step for issuing a challenge phrase to the client @ get.login
+   * @dev after metamask login, user must GET /login in order to be issued a challenge string.
+   * The user then signs the string and returns it within 5 minutes. If the challenge expires,
+   * another challenge must be issued in order to POST /login.
    */
   app
     .route('/login')
-    .get(
-      (req, res, next) => ctrl.rtknValidation(req, res, next),
-      (req, res) => ctrl.metadata(req, res) // metadata
-    )
+    .get((req, res) => ctrl.issueChallenge(req, res)) // get challenge
     .post(
+      (req, res, next) => ctrl.chValidation(req, res, next),
       (req, res, next) => evm.sigValidation(req, res, next),
       (req, res) => ctrl.login(req, res) // login
     )
