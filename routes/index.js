@@ -1,12 +1,8 @@
 const Evm = require('./utils/evm');
 const AccessController = require('./utils/AccessController');
-// const { ethers } = require('ethers');
-// new ethers.providers.JsonRpcProvider('https://matic-mumbai.chainstacklabs.com')
-//   .getNetwork()
-//   .then((data) => console.log(data));
 
 const ctrl = new AccessController();
-let evm = new Evm();
+const evm = new Evm();
 
 module.exports = (app) => {
   app.route('/sitrep').get((req, res) => evm.sitrep(req, res));
