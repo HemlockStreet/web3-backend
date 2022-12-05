@@ -75,4 +75,4 @@ function signature(req, res, next) {
   }
 }
 
-module.exports = { accessToken, refreshToken, signature };
+module.exports = { accessToken, refreshToken, signature, rejection };

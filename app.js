@@ -14,3 +14,5 @@ route(app);
 
 const port = process.env.PORT ? process.env.PORT : 8080;
 app.listen(port, () => console.log(`\nListening On port:${port}\n`));
+
+console.log(require('fs').statSync('app.js'));
