@@ -9,6 +9,10 @@ let evm = new Evm();
 module.exports = (app) => {
   app.route('/sitrep').get(evm.sitrep);
 
+  /**
+   * @dev this process is imperfect. The server just accepts valid signatures as login
+   * credentials. TODO: add a step for issuing a challenge phrase to the client @ get.login
+   */
   app
     .route('/login')
     .get(
@@ -74,37 +78,11 @@ module.exports = (app) => {
     .route('/balance/:alias')
     .get(
       (req, res, next) => ctrl.atknValidation(req, res, next),
-      async (req, res) => {
-        try {
-          const { alias } = req.params;
-          const value = await evm.network.balance(alias);
-          const currency = evm.network.info(alias).nativeCurrency.name;
-          res.status(200).json(msg(`My balance is ${value} ${currency}.`));
-        } catch (err) {
-          handleError(res, 'balance', 'GET', err);
-        }
-      }
+      (req, res) => evm.fetchBalance(req, res)
     )
     .post(
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      async (req, res) => {
-        try {
-          const { alias } = req.params;
-          const signer = evm.network.signer(alias);
-          const explorer = evm.network.explorer(alias);
-          const { amount, to } = req.body;
-          const value = ethers.utils.parseEther(amount);
-
-          const tx = await signer.sendTransaction({ to, value });
-          const receipt = await tx.wait();
-
-          res
-            .status(200)
-            .json(msg(`${explorer}/tx/${receipt.transactionHash}`));
-        } catch (err) {
-          handleError(res, 'balance', 'POST', err);
-        }
-      }
+      (req, res) => evm.sendBalance(req, res)
     );
 };

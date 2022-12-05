@@ -84,7 +84,8 @@ module.exports = class AccessController {
     };
 
     const message = {
-      info: `${address} logged into a new session`,
+      info: `logged in`,
+      by: address,
       timestamp: new Date(),
     };
     console.log(message);
@@ -105,11 +106,12 @@ module.exports = class AccessController {
     this.sessions.logOut(address);
 
     const message = {
-      info: `${address} logged out of current session`,
+      info: `logged out`,
+      by: address,
       timestamp: new Date(),
     };
     console.log(message);
-    res.clearCookie('rtkn').clearCookie('atkn').status(204).json(message);
+    res.status(204).json(message);
   }
 
   // DELETE /login
@@ -123,7 +125,7 @@ module.exports = class AccessController {
       timestamp: new Date(),
     };
     console.log(message);
-    res.clearCookie('rtkn').clearCookie('atkn').status(204).json(message);
+    res.status(204).json(message);
   }
 
   // GET /manage/::group
@@ -141,10 +143,8 @@ module.exports = class AccessController {
 
   // PUT /manage/::group
   promote(req, res) {
-    const rejectAs = (nature) => {
-      res.clearCookie('rtkn').clearCookie('atkn');
-      return rejection('promotion', nature, res);
-    };
+    const rejectAs = (nature) => rejection('promotion', nature, res);
+
     const to = req.params.group;
     const user = req.body.args.address;
     if ([user, to].includes(undefined)) return rejectAs('invalid input');
@@ -164,10 +164,8 @@ module.exports = class AccessController {
 
   // PATCH /manage/::group
   demote(req, res) {
-    const rejectAs = (nature) => {
-      res.clearCookie('rtkn').clearCookie('atkn');
-      return rejection('demotion', nature, res);
-    };
+    const rejectAs = (nature) => rejection('demotion', nature, res);
+
     const to = req.params.group;
     const user = req.body.args.address;
     if ([user, to].includes(undefined)) return rejectAs('invalid input');
@@ -187,10 +185,8 @@ module.exports = class AccessController {
 
   // DELETE /manage/::group
   eject(req, res) {
-    const rejectAs = (nature) => {
-      res.clearCookie('rtkn').clearCookie('atkn');
-      return rejection('ejection', nature, res);
-    };
+    const rejectAs = (nature) => rejection('ejection', nature, res);
+
     const from = req.params.group;
     const user = req.body.args.address;
     if ([user, from].includes(undefined)) return rejectAs('invalid input');
