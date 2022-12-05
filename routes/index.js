@@ -78,11 +78,11 @@ module.exports = (app) => {
     .route('/balance/:alias')
     .get(
       (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res) => evm.fetchBalance(req, res)
+      (req, res) => evm.fetchBalance(req, res) // fetch deployer balance
     )
     .post(
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      (req, res) => evm.sendBalance(req, res)
+      (req, res) => evm.sendBalance(req, res) // send deployer balance
     );
 };
