@@ -1,5 +1,9 @@
 const Evm = require('./utils/evm');
 const AccessController = require('./utils/AccessController');
+// const { ethers } = require('ethers');
+// new ethers.providers.JsonRpcProvider('https://matic-mumbai.chainstacklabs.com')
+//   .getNetwork()
+//   .then((data) => console.log(data));
 
 const ctrl = new AccessController();
 let evm = new Evm();
@@ -65,22 +69,38 @@ module.exports = (app) => {
    * for network information. evm.network.info targets the file
    * ./utils/evm/ChainConfig.json. For more information, go there.
    */
-  // app
-  //   .route('/config/:alias')
-  //   .get((req, res, next) => ctrl.atknValidation(req, res, next)) // view network details
-  //   .put((req, res, next) => ctrl.atknValidation(req, res, next)) // add new network
-  //   .patch((req, res, next) => ctrl.atknValidation(req, res, next)) // manage network details
-  //   .delete((req, res, next) => ctrl.atknValidation(req, res, next)); // remove network
+  app
+    .route('/network/:alias')
+    .get(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
+      (req, res, next) => evm.netValidation(req, res, next),
+      (req, res) => evm.viewNetwork(req, res) // view network details
+    )
+    .put(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
+      (req, res, next) => evm.netValidation(req, res, next),
+      (req, res) => evm.editNetwork(req, res) // manage network details
+    )
+    .delete(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
+      (req, res, next) => evm.netValidation(req, res, next),
+      (req, res) => evm.removeNetwork(req, res) // remove network
+    );
 
   app
     .route('/balance/:alias')
     .get(
       (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.fetchBalance(req, res) // fetch deployer balance
     )
-    .post(
+    .patch(
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.sendBalance(req, res) // send deployer balance
     );
 };

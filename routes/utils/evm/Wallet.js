@@ -1,22 +1,24 @@
-const fs = require('fs');
+const LocalData = require('../data/LocalData');
 const ethers = require('ethers');
 
-class Wallet {
-  constructor() {
-    const wPath = './routes/utils/evm/WalletConfig.json';
-    let wallet;
-    if (fs.existsSync(wPath)) {
-      this.key = require('./WalletConfig.json').privateKey;
-      wallet = new ethers.Wallet(this.key);
-      this.address = wallet.address;
-    } else {
-      wallet = ethers.Wallet.createRandom();
-      const signingKey = wallet._signingKey();
-      this.key = signingKey.privateKey;
-      this.address = wallet.address;
-      fs.writeFileSync(wPath, JSON.stringify(signingKey, undefined, 2));
-    }
+module.exports = class Wallet extends LocalData {
+  extract() {
+    this.key = this.data.privateKey;
+    this.address = new ethers.Wallet(this.key).address;
   }
-}
 
-module.exports = Wallet;
+  create() {
+    const wallet = ethers.Wallet.createRandom();
+    const signingKey = wallet._signingKey();
+    if (this.opts.testing.Wallet) console.log({ ingressed: signingKey });
+    super.ingress(signingKey);
+  }
+
+  constructor(opts = { testing: {} }) {
+    super(`${__dirname}/WalletConfig.json`);
+    this.opts = opts;
+    if (!this.data.privateKey) this.create();
+    this.extract();
+    if (this.opts.testing.Wallet) console.log(this);
+  }
+};
