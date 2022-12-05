@@ -13,6 +13,25 @@ module.exports = class Network extends LocalData {
     this.update(true);
   }
 
+  publicInfo() {
+    const available = super.keys();
+    let result = {};
+    available.forEach((name) => {
+      const details = this.data[name];
+      result[name] = {
+        chainId: details.id,
+        name: details.name,
+        network: details.network,
+        nativeCurrency: details.nativeCurrency,
+        ens: details.ens?.address,
+        multicall: details.multicall?.address,
+        publicRpc: details.rpc,
+        explorer: details.explorer.url,
+      };
+    });
+    return result;
+  }
+
   info(alias) {
     const available = super.keys();
     let entry;
@@ -38,7 +57,9 @@ module.exports = class Network extends LocalData {
   }
 
   provider(alias) {
-    return new ethers.providers.JsonRpcProvider(this.info(alias).rpc);
+    const profile = this.info(alias);
+    const endpoint = profile.privateRpc ? profile.privateRpc : profile.rpc;
+    return new ethers.providers.JsonRpcProvider(endpoint);
   }
 
   signer(alias, key) {
@@ -68,6 +89,8 @@ module.exports = class Network extends LocalData {
       addresses = {};
 
       if (data.ens && data.ens.address) addresses.eAddr = data.ens.address;
+      strings.privateRpc = data.privateRpc ? data.privateRpc : rpc;
+      input.privateRpc = strings.privateRpc;
 
       if (data.multicall) {
         const { address: mcAddr, blockCreated: mcBlockCreated } =
@@ -96,6 +119,7 @@ module.exports = class Network extends LocalData {
     // EXPLORER URL & API URL ARE ONLY TESTED WITH A GET REQUEST
     const urlCheck = async () => {
       const { rpc, exUrl, exApi } = strings;
+
       try {
         const testProvider = new ethers.providers.JsonRpcProvider(rpc);
         const net = await testProvider.getNetwork();
@@ -106,11 +130,28 @@ module.exports = class Network extends LocalData {
           throw new Error('invalid rpc');
         else throw new Error(err.toString());
       }
+
+      if (rpc !== input.privateRpc) {
+        try {
+          const testProvider = new ethers.providers.JsonRpcProvider(
+            input.privateRpc
+          );
+          const net = await testProvider.getNetwork();
+          if (net.chainId !== numbers.id) throw new Error(`chainId mismatch`);
+          input.network = net.name;
+        } catch (err) {
+          if (err.toString() !== `chainId mismatch`)
+            throw new Error('invalid private rpc');
+          else throw new Error(err.toString());
+        }
+      }
+
       try {
         await fetch(exUrl);
       } catch {
         throw new Error('invalid explorer url');
       }
+
       if (exApi !== '') {
         try {
           await fetch(exApi);

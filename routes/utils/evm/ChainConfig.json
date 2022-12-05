@@ -20,7 +20,8 @@
       "name": "Etherscan",
       "url": "https://etherscan.io",
       "api": "https://api.etherscan.io/api"
-    }
+    },
+    "privateRpc": "https://cloudflare-eth.com"
   },
   "goerli": {
     "id": 5,

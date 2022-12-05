@@ -13,7 +13,7 @@ class Evm {
   sitrep(req, res) {
     res.status(200).json({
       deployer: this.wallet.address,
-      networks: this.network.list,
+      networks: this.network.publicInfo(),
     });
   }
 
