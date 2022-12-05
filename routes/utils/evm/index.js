@@ -26,6 +26,13 @@ class Evm {
       return rejectAs('invalid');
     }
   }
+
+  sitrep(req, res) {
+    res.status(200).json({
+      deployer: this.wallet.address,
+      networks: this.network.list,
+    });
+  }
 }
 
 module.exports = Evm;

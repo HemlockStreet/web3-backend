@@ -4,6 +4,7 @@ const validate = require('./utils/validation');
 const Evm = require('./utils/evm');
 const handleError = require('./utils/errorHandler');
 const Auth = require('./utils/auth');
+const AccessController = require('./utils/accessControl');
 
 const pass = (res) => res.status(200).json({ info: 'ok' });
 
@@ -14,54 +15,16 @@ const cookieOpts = {
 };
 
 module.exports = (app) => {
+  const controller = new AccessController();
   let evm = new Evm();
-  let auth = new Auth();
 
-  app.get('/sitrep', (req, res) =>
-    res.status(200).json({
-      deployer: evm.wallet.address,
-      networks: evm.network.list,
-    })
-  );
+  app.route('/sitrep').get(evm.sitrep);
 
   app
     .route('/login')
-    .post(validate.signature, async (req, res) => {
-      const { atkn, rtkn } = auth.tkn.generate(req.userData);
-      auth.sesh.add(rtkn);
-
-      res.cookie('atkn', atkn, cookieOpts);
-      res.cookie('rtkn', rtkn, cookieOpts);
-      const iat = auth.tkn.decode(atkn).iat;
-
-      res.status(200).json({ iat });
-    })
-    .patch(validate.refreshToken, (req, res) => {
-      auth.sesh.rm(req.cookies.rtkn);
-
-      const { atkn, rtkn } = auth.tkn.generate(req.userData);
-      auth.sesh.add(rtkn);
-
-      res.cookie('atkn', atkn, cookieOpts);
-      res.cookie('rtkn', rtkn, cookieOpts);
-      const iat = auth.tkn.decode(atkn).iat;
-
-      res.status(200).json({ iat });
-    })
-    .delete(validate.refreshToken, (req, res) => {
-      const { rtkn } = req.cookies;
-      if (!auth.sesh.all.includes(rtkn))
-        return res
-          .status(403)
-          .json({ info: 'validation.refreshToken - invalid' });
-      auth.sesh.rm(rtkn);
-
-      auth.sesh.clean();
-
-      res.clearCookie('rtkn');
-      res.clearCookie('atkn');
-      pass(res);
-    });
+    .post(evm.validateSignature, controller.handleLogin)
+    .patch(controller.validateRefreshToken, controller.handleLogin)
+    .delete(controller.validateRefreshToken, controller.handleLogout);
 
   /**
    * @param alias the object key, chainId, name, or network nickname
@@ -72,7 +35,7 @@ module.exports = (app) => {
    */
   app
     .route('/balance/:alias')
-    .get(async (req, res) => {
+    .get(controller.validateAccessToken, async (req, res) => {
       try {
         const { alias } = req.params;
         const value = await evm.network.balance(alias);
@@ -82,7 +45,7 @@ module.exports = (app) => {
         handleError(res, 'balance', 'GET', err);
       }
     })
-    .post(validate.accessToken, async (req, res) => {
+    .post(controller.validateAccessToken, async (req, res) => {
       try {
         const { alias } = req.params;
         const signer = evm.network.signer(alias);
