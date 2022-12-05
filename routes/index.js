@@ -12,9 +12,25 @@ module.exports = (app) => {
 
   app
     .route('/login')
-    .post(evm.validateSignature, controller.handleLogin)
-    .patch(controller.validateRefreshToken, controller.handleLogin)
-    .delete(controller.validateRefreshToken, controller.handleLogout);
+    .get(controller.validateRefreshToken, controller.handleMetadata) // userData
+    .post(evm.validateSignature, controller.handleLogin) // login
+    .put(controller.validateRefreshToken, controller.handleLogout) // logout
+    .patch(controller.validateRefreshToken, controller.handleLogin) // refresh
+    .delete(controller.validateRefreshToken, controller.handleLogOutAll); // logout all
+
+  app
+    .route('/manage/::group')
+    .get(controller.validateAccessToken) // whois in group members
+    .put(controller.validateAccessToken) // promote members
+    .patch(controller.validateAccessToken) // demote members
+    .delete(controller.validateAccessToken); // remove members
+
+  app
+    .route('/config/::network')
+    .get(controller.validateAccessToken) // view network details
+    .put(controller.validateAccessToken) // add new network
+    .patch(controller.validateAccessToken) // manage network details
+    .delete(controller.validateAccessToken); // remove network
 
   /**
    * @param alias the object key, chainId, name, or network nickname
