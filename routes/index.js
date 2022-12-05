@@ -1,36 +1,60 @@
 const ethers = require('ethers');
 const Evm = require('./utils/evm');
-const AccessController = require('./utils/accessControl');
-
+const AccessController = require('./utils/AccessController');
 const handleError = require('./utils/errorHandler');
 
-module.exports = (app) => {
-  let evm = new Evm();
-  const controller = new AccessController();
+const ctrl = new AccessController();
+let evm = new Evm();
 
+module.exports = (app) => {
   app.route('/sitrep').get(evm.sitrep);
 
   app
     .route('/login')
-    .get(controller.validateRefreshToken, controller.handleMetadata) // userData
-    .post(evm.validateSignature, controller.handleLogin) // login
-    .put(controller.validateRefreshToken, controller.handleLogout) // logout
-    .patch(controller.validateRefreshToken, controller.handleLogin) // refresh
-    .delete(controller.validateRefreshToken, controller.handleLogOutAll); // logout all
+    .get(
+      (req, res, next) => ctrl.rtknValidation(req, res, next),
+      (req, res) => ctrl.metadata(req, res) // metadata
+    )
+    .post(
+      (req, res, next) => evm.sigValidation(req, res, next),
+      (req, res) => ctrl.login(req, res) // login
+    )
+    .put(
+      (req, res, next) => ctrl.rtknValidation(req, res, next),
+      (req, res) => ctrl.logout(req, res) // logout
+    )
+    .patch(
+      (req, res, next) => ctrl.rtknValidation(req, res, next),
+      (req, res) => ctrl.login(req, res) // refresh
+    )
+    .delete(
+      (req, res, next) => ctrl.rtknValidation(req, res, next),
+      (req, res) => ctrl.logoutAll(req, res) // logout all
+    );
 
+  /**
+   * @dev put/patch/delete all log the user out
+   * @param group pick from ['wheel', 'management', 'employee', 'client']
+   */
   app
-    .route('/manage/::group')
-    .get(controller.validateAccessToken) // whois in group members
-    .put(controller.validateAccessToken) // promote members
-    .patch(controller.validateAccessToken) // demote members
-    .delete(controller.validateAccessToken); // remove members
-
-  app
-    .route('/config/::network')
-    .get(controller.validateAccessToken) // view network details
-    .put(controller.validateAccessToken) // add new network
-    .patch(controller.validateAccessToken) // manage network details
-    .delete(controller.validateAccessToken); // remove network
+    .route('/manage/:group')
+    .get(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res) => ctrl.view(req, res) // whois in group members
+    )
+    .put(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res) => ctrl.promote(req, res) // promote members
+    )
+    .patch(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res) => ctrl.demote(req, res) // demote members
+    )
+    .delete(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
+      (req, res) => ctrl.eject(req, res) // remove members
+    );
 
   /**
    * @param alias the object key, chainId, name, or network nickname
@@ -40,31 +64,47 @@ module.exports = (app) => {
    * ./utils/evm/ChainConfig.json. For more information, go there.
    */
   app
+    .route('/config/:alias')
+    .get((req, res, next) => ctrl.atknValidation(req, res, next)) // view network details
+    .put((req, res, next) => ctrl.atknValidation(req, res, next)) // add new network
+    .patch((req, res, next) => ctrl.atknValidation(req, res, next)) // manage network details
+    .delete((req, res, next) => ctrl.atknValidation(req, res, next)); // remove network
+
+  app
     .route('/balance/:alias')
-    .get(controller.validateAccessToken, async (req, res) => {
-      try {
-        const { alias } = req.params;
-        const value = await evm.network.balance(alias);
-        const currency = evm.network.info(alias).nativeCurrency.name;
-        res.status(200).json(msg(`My balance is ${value} ${currency}.`));
-      } catch (err) {
-        handleError(res, 'balance', 'GET', err);
+    .get(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      async (req, res) => {
+        try {
+          const { alias } = req.params;
+          const value = await evm.network.balance(alias);
+          const currency = evm.network.info(alias).nativeCurrency.name;
+          res.status(200).json(msg(`My balance is ${value} ${currency}.`));
+        } catch (err) {
+          handleError(res, 'balance', 'GET', err);
+        }
       }
-    })
-    .post(controller.validateAccessToken, async (req, res) => {
-      try {
-        const { alias } = req.params;
-        const signer = evm.network.signer(alias);
-        const explorer = evm.network.explorer(alias);
-        const { amount, to } = req.body;
-        const value = ethers.utils.parseEther(amount);
+    )
+    .post(
+      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
+      async (req, res) => {
+        try {
+          const { alias } = req.params;
+          const signer = evm.network.signer(alias);
+          const explorer = evm.network.explorer(alias);
+          const { amount, to } = req.body;
+          const value = ethers.utils.parseEther(amount);
 
-        const tx = await signer.sendTransaction({ to, value });
-        const receipt = await tx.wait();
+          const tx = await signer.sendTransaction({ to, value });
+          const receipt = await tx.wait();
 
-        res.status(200).json(msg(`${explorer}/tx/${receipt.transactionHash}`));
-      } catch (err) {
-        handleError(res, 'balance', 'POST', err);
+          res
+            .status(200)
+            .json(msg(`${explorer}/tx/${receipt.transactionHash}`));
+        } catch (err) {
+          handleError(res, 'balance', 'POST', err);
+        }
       }
-    });
+    );
 };

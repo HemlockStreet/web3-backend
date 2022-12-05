@@ -1,11 +1,11 @@
 const UserGroup = require('./UserGroup');
 
-module.exports = class AccessControl {
+module.exports = class SessionManager {
   constructor(opts = { testing: {} }) {
     this.opts = opts;
     const addon = opts.testing.AccessControl ? 'Test' : '';
     this.group = {
-      wheel: new UserGroup('Wheel' + addon), // Owners
+      wheel: new UserGroup('Wheel' + addon),
       manager: new UserGroup('Management' + addon),
       employee: new UserGroup('Employee' + addon),
       client: new UserGroup('Client' + addon),
@@ -41,6 +41,14 @@ module.exports = class AccessControl {
     );
   }
 
+  allowAccess(address, rtkn) {
+    const groupTokens = this.group[this.findGroup(address)].data;
+    const utkn = groupTokens[address];
+    const loggedIn = utkn !== '';
+    const isMatch = utkn === rtkn;
+    return isMatch && loggedIn;
+  }
+
   promote(user, to, author) {
     if (!this.isAllowed(to, author)) return;
     const from = this.findGroup(user);
@@ -52,13 +60,20 @@ module.exports = class AccessControl {
     return this.group[to].add(user);
   }
 
-  demote(user, from, to, author) {
+  demote(user, to, author) {
+    const from = this.findGroup(user);
     if (!this.isAllowed(from, author)) return;
     if (!this.isAllowed(to, author)) return;
     this.group[from].remove(user);
     this.group[to].add(user);
     if (this.opts.testing.AccessControl)
       console.log('demoted', user, 'to', to, 'from', from, 'author:', author);
+    return true;
+  }
+
+  eject(user, from, author) {
+    if (!this.isAllowed(from, author)) return;
+    this.group[from].remove(user);
     return true;
   }
 

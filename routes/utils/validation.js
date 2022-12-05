@@ -4,7 +4,8 @@ function rejection(type, nature, res) {
   let status;
   if (['stolen', 'invalid', 'duplicate', '!authorized'].includes(nature))
     status = 403;
-  if (['missing', 'incomplete/ missing'].includes(nature)) status = 401;
+  if (['missing', 'incomplete/ missing', 'invalid input'].includes(nature))
+    status = 401;
 
   res.status(status).json(data);
 }

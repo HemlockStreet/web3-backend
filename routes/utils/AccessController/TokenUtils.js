@@ -7,17 +7,17 @@ const pathTo = (testing) =>
 const LocalData = require('../data/LocalData');
 module.exports = class TokenUtils extends LocalData {
   update(log = false) {
-    this.token = super.egress();
+    super.egress();
     if (this.opts.testing.TokenUtils && log)
-      console.log({ egressed: this.token });
+      console.log({ egressed: this.data });
   }
 
   reset() {
     const access = crypto.randomBytes(64).toString('hex');
     const refresh = crypto.randomBytes(64).toString('hex');
-    this.token = { access, refresh };
-    super.ingress(this.token);
-    if (this.opts.testing.TokenUtils) console.log({ ingressed: this.token });
+    this.data = { access, refresh };
+    super.ingress(this.data);
+    if (this.opts.testing.TokenUtils) console.log({ ingressed: this.data });
     this.update(true);
   }
 
@@ -25,12 +25,12 @@ module.exports = class TokenUtils extends LocalData {
     super(pathTo(opts.testing.TokenUtils));
     this.opts = opts;
     this.update(true);
-    if (!this.token.access || !this.token.refresh) this.reset();
+    if (!this.data.access || !this.data.refresh) this.reset();
   }
 
   generate(data) {
-    const atkn = jwt.sign(data, this.token.access, { expiresIn: '90m' });
-    const rtkn = jwt.sign(data, this.token.refresh, { expiresIn: '2400m' });
+    const atkn = jwt.sign(data, this.data.access, { expiresIn: '90m' });
+    const rtkn = jwt.sign(data, this.data.refresh, { expiresIn: '2400m' });
     const output = { atkn, rtkn };
     if (this.opts.testing.TokenUtils) console.log({ generated: output });
     return output;
@@ -41,7 +41,7 @@ module.exports = class TokenUtils extends LocalData {
   }
 
   verify(type, token) {
-    const secret = type === 'atkn' ? this.token.access : this.token.refresh;
+    const secret = type === 'atkn' ? this.data.access : this.data.refresh;
     try {
       return jwt.verify(token, secret);
     } catch {

@@ -1,8 +1,7 @@
 const LocalData = require('../data/LocalData');
 module.exports = class UserGroup extends LocalData {
   update(log = false) {
-    this.data = super.egress();
-
+    super.egress();
     if (this.opts.testing.UserGroup && log)
       console.log({ egressed: this.data });
   }

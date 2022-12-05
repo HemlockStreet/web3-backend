@@ -13,14 +13,13 @@ class Evm {
     this.network = new Network(this.wallet);
   }
 
-  validateSignature(req, res, next) {
+  sigValidation(req, res, next) {
     const rejectAs = (nature) => rejection('signature', nature, res);
-    const { ip } = req;
     try {
       const { message, signature, address } = req.body.user;
       const signer = ethers.utils.verifyMessage(message, signature);
       if (address !== signer) return rejectAs('stolen');
-      req.userData = { address, ip };
+      req.userData = { address, ip: req.ip };
       next();
     } catch {
       return rejectAs('invalid');
