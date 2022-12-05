@@ -9,7 +9,7 @@ const ctrl = new AccessController();
 let evm = new Evm();
 
 module.exports = (app) => {
-  app.route('/sitrep').get(evm.sitrep);
+  app.route('/sitrep').get((req, res) => evm.sitrep(req, res));
 
   /**
    * @dev after metamask login, user must GET /login in order to be issued a challenge string.
@@ -49,10 +49,12 @@ module.exports = (app) => {
     )
     .put(
       (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
       (req, res) => ctrl.promote(req, res) // promote members
     )
     .patch(
       (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
       (req, res) => ctrl.demote(req, res) // demote members
     )
     .delete(
@@ -71,35 +73,35 @@ module.exports = (app) => {
   app
     .route('/network/:alias')
     .get(
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.viewNetwork(req, res) // view network details
     )
     .put(
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.editNetwork(req, res) // manage network details
     )
     .delete(
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.removeNetwork(req, res) // remove network
     );
 
   app
     .route('/balance/:alias')
     .get(
-      (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => evm.netValidation(req, res, next),
+      (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res) => evm.fetchBalance(req, res) // fetch deployer balance
     )
     .patch(
+      (req, res, next) => evm.netValidation(req, res, next),
       (req, res, next) => ctrl.atknValidation(req, res, next),
       (req, res, next) => ctrl.requireTier(5, req, res, next),
-      (req, res, next) => evm.netValidation(req, res, next),
       (req, res) => evm.sendBalance(req, res) // send deployer balance
     );
 };

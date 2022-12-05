@@ -105,16 +105,20 @@ class Evm {
     const explorer = this.network.explorer(alias);
 
     try {
-      const { amount, to } = req.body;
+      const { amount, to } = req.body.args;
       const value = ethers.utils.parseEther(amount);
+
       let tx;
       tx = await signer.sendTransaction({ to, value });
+
       // ERC20 && ERC721
       const receipt = await tx.wait();
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
       const message = {
-        info: `withdrew ${value} ${currency} to ${to}`,
+        info: `withdrew ${ethers.utils.formatEther(
+          value
+        )} ${currency} to ${to}`,
         tx: link,
         by: req.userData.address,
         timestamp: new Date(),
@@ -122,11 +126,7 @@ class Evm {
       console.log(message);
       res.status(200).json({ tx: link });
     } catch (err) {
-      rejection(
-        `send balance @${alias ? alias : 'undefined network'}`,
-        'invalid',
-        res
-      );
+      res.status(400).json({ info: err.toString() });
     }
   }
 }
