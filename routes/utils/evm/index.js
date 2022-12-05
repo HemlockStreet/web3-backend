@@ -105,13 +105,30 @@ class Evm {
     const explorer = this.network.explorer(alias);
 
     try {
-      const { amount, to } = req.body.args;
-      const value = ethers.utils.parseEther(amount);
+      const { value, to, assetType } = req.body.args;
 
       let tx;
-      tx = await signer.sendTransaction({ to, value });
 
-      // ERC20 && ERC721
+      if (assetType === 'gas') {
+        const amount = ethers.utils.parseEther(value);
+        tx = await signer.sendTransaction({ to, amount });
+      } else if (['ERC20', 'ERC721', 'ERC1155'].includes(assetType)) {
+        const { contractAddress } = req.body.args;
+        const { abi } = require(`./interfaces/${assetType}.json`);
+        const token = new ethers.Contract(contractAddress, abi, signer);
+        if (assetType === 'ERC20') {
+          const decimals = await token.decimals();
+          const amount = (parseFloat(value) * 10 ** decimals).toString();
+          tx = await token.transferFrom(this.wallet.address, to, amount);
+        } else if (assetType === 'ERC721') {
+          const id = parseInt(value);
+          tx = await token.transferFrom(this.wallet.address, to, id);
+        } else if (assetType === 'ERC1155') {
+          //
+          throw new Error('ERC1155 endpoint not configured');
+        }
+      } else throw new Error('invalid asset type');
+
       const receipt = await tx.wait();
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
