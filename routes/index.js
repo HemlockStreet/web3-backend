@@ -1,7 +1,5 @@
-const ethers = require('ethers');
 const Evm = require('./utils/evm');
 const AccessController = require('./utils/AccessController');
-const handleError = require('./utils/errorHandler');
 
 const ctrl = new AccessController();
 let evm = new Evm();
@@ -67,12 +65,12 @@ module.exports = (app) => {
    * for network information. evm.network.info targets the file
    * ./utils/evm/ChainConfig.json. For more information, go there.
    */
-  app
-    .route('/config/:alias')
-    .get((req, res, next) => ctrl.atknValidation(req, res, next)) // view network details
-    .put((req, res, next) => ctrl.atknValidation(req, res, next)) // add new network
-    .patch((req, res, next) => ctrl.atknValidation(req, res, next)) // manage network details
-    .delete((req, res, next) => ctrl.atknValidation(req, res, next)); // remove network
+  // app
+  //   .route('/config/:alias')
+  //   .get((req, res, next) => ctrl.atknValidation(req, res, next)) // view network details
+  //   .put((req, res, next) => ctrl.atknValidation(req, res, next)) // add new network
+  //   .patch((req, res, next) => ctrl.atknValidation(req, res, next)) // manage network details
+  //   .delete((req, res, next) => ctrl.atknValidation(req, res, next)); // remove network
 
   app
     .route('/balance/:alias')
