@@ -1,22 +1,12 @@
 const ethers = require('ethers');
-const validate = require('./utils/validation');
-
 const Evm = require('./utils/evm');
-const handleError = require('./utils/errorHandler');
-const Auth = require('./utils/auth');
 const AccessController = require('./utils/accessControl');
 
-const pass = (res) => res.status(200).json({ info: 'ok' });
-
-const cookieOpts = {
-  httpOnly: true,
-  // secure: true,
-  // domain: 'mywebsite.com'
-};
+const handleError = require('./utils/errorHandler');
 
 module.exports = (app) => {
-  const controller = new AccessController();
   let evm = new Evm();
+  const controller = new AccessController();
 
   app.route('/sitrep').get(evm.sitrep);
 

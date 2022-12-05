@@ -52,6 +52,11 @@ module.exports = class AccessController {
       atkn: this.utils.decode(atkn),
       rtkn: this.utils.decode(rtkn),
     };
+    const cookieOpts = {
+      httpOnly: true,
+      // secure: true,
+      // domain: 'mywebsite.com'
+    };
     res
       .cookie('atkn', atkn, cookieOpts)
       .cookie('rtkn', rtkn, cookieOpts)
