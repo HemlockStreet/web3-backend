@@ -100,7 +100,6 @@ class Evm {
   // PATCH /balance/:alias
   async sendBalance(req, res) {
     const alias = req.params.alias;
-    const currency = this.network.info(alias).nativeCurrency.name;
     const signer = this.network.signer(alias, this.wallet.key);
     const explorer = this.network.explorer(alias);
 
