@@ -107,24 +107,32 @@ class Evm {
     try {
       const { value, to, assetType } = req.body.args;
 
-      let tx;
+      let tx, info;
 
       if (assetType === 'gas') {
         const amount = ethers.utils.parseEther(value);
-        tx = await signer.sendTransaction({ to, amount });
+        tx = await signer.sendTransaction({ to, value: amount });
+
+        info = `withdrew gas`;
       } else if (['ERC20', 'ERC721', 'ERC1155'].includes(assetType)) {
         const { contractAddress } = req.body.args;
         const { abi } = require(`./interfaces/${assetType}.json`);
         const token = new ethers.Contract(contractAddress, abi, signer);
+
         if (assetType === 'ERC20') {
           const decimals = await token.decimals();
           const amount = (parseFloat(value) * 10 ** decimals).toString();
           tx = await token.transferFrom(this.wallet.address, to, amount);
+
+          info = `withdrew ERC20`;
         } else if (assetType === 'ERC721') {
           const id = parseInt(value);
           tx = await token.transferFrom(this.wallet.address, to, id);
+
+          info = `withdrew ERC721`;
         } else if (assetType === 'ERC1155') {
           //
+          info = `withdrew ERC1155`;
           throw new Error('ERC1155 endpoint not configured');
         }
       } else throw new Error('invalid asset type');
@@ -133,9 +141,7 @@ class Evm {
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
       const message = {
-        info: `withdrew ${ethers.utils.formatEther(
-          value
-        )} ${currency} to ${to}`,
+        info,
         tx: link,
         by: req.userData.address,
         timestamp: new Date(),
