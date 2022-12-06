@@ -30,6 +30,7 @@ module.exports = (app) => {
     )
     .delete(
       (req, res, next) => ctrl.rtknValidation(req, res, next),
+      (req, res, next) => ctrl.requireTier(5, req, res, next),
       (req, res) => ctrl.logoutAll(req, res) // logout all
     );
 
