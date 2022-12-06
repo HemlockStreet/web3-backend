@@ -132,8 +132,8 @@ class Evm {
           info = `withdrew ERC721`;
         } else if (assetType === 'ERC1155') {
           const { bytes: data, valueId: rawId } = req.body.args;
-          const amount = parseInt(value);
-          const id = parseInt(rawId);
+          const id = parseInt(rawId); // type of token
+          const amount = parseInt(value); // amount of token
           tx = token.safeTransferFrom(from, to, id, amount, data);
 
           info = `withdrew ERC1155`;
