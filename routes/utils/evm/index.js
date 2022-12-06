@@ -118,22 +118,26 @@ class Evm {
         const { contractAddress } = req.body.args;
         const { abi } = require(`./interfaces/${assetType}.json`);
         const token = new ethers.Contract(contractAddress, abi, signer);
+        const from = this.wallet.address;
 
         if (assetType === 'ERC20') {
           const decimals = await token.decimals();
           const amount = (parseFloat(value) * 10 ** decimals).toString();
-          tx = await token.transferFrom(this.wallet.address, to, amount);
+          tx = await token.transferFrom(from, to, amount);
 
           info = `withdrew ERC20`;
         } else if (assetType === 'ERC721') {
           const id = parseInt(value);
-          tx = await token.transferFrom(this.wallet.address, to, id);
+          tx = await token.transferFrom(from, to, id);
 
           info = `withdrew ERC721`;
         } else if (assetType === 'ERC1155') {
-          //
+          const { bytes: data, valueId: rawId } = req.body.args;
+          const amount = parseInt(value);
+          const id = parseInt(rawId);
+          tx = token.safeTransferFrom(from, to, id, amount, data);
+
           info = `withdrew ERC1155`;
-          throw new Error('ERC1155 endpoint not configured');
         }
       } else throw new Error('invalid asset type');
 
