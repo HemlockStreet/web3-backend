@@ -1,8 +1,6 @@
 const fs = require('fs');
-const jwt = require('jsonwebtoken');
 
 const pathTo = './routes/utils/auth/Sessions.json';
-
 class SessionTracker {
   exists() {
     return fs.existsSync(pathTo);
