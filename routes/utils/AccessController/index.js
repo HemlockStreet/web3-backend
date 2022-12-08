@@ -17,11 +17,12 @@ module.exports = class AccessController {
     if (!rtkn) return rejectAs('missing');
     const decoded = this.utils.verify('rtkn', rtkn);
     if (decoded?.ip !== req.ip) return rejectAs('invalid');
-    const { address, ip } = decoded;
+    const { address, ip, timestamp } = decoded;
     if (!this.sessions.allowAccess(address, rtkn)) return rejectAs('invalid');
     req.userData = {
       address,
       ip,
+      timestamp,
       tier: this.sessions.tier(address),
     };
     next();
@@ -37,11 +38,12 @@ module.exports = class AccessController {
     if ([atkn, rtkn].includes(undefined)) return rejectAs('missing');
     const decoded = this.utils.verify('atkn', atkn);
     if (decoded?.ip !== req.ip) return rejectAs('invalid');
-    const { address, ip } = decoded;
+    const { address, ip, timestamp } = decoded;
     if (!this.sessions.allowAccess(address, rtkn)) return rejectAs('invalid');
     req.userData = {
       address,
       ip,
+      timestamp,
       tier: this.sessions.tier(address),
     };
     next();
@@ -70,8 +72,8 @@ module.exports = class AccessController {
 
   // POST/PATCH /login
   login(req, res) {
-    const { address, ip } = req.userData;
-    const { atkn, rtkn } = this.utils.generate({ address, ip });
+    const { address, ip, timestamp } = req.userData;
+    const { atkn, rtkn } = this.utils.generate({ address, ip, timestamp });
 
     // returning users
     if (!this.sessions.logIn(address, rtkn)) {
@@ -96,7 +98,7 @@ module.exports = class AccessController {
     const message = {
       info: `logged in`,
       by: address,
-      timestamp: new Date(),
+      timestamp,
     };
     console.log(message);
     res

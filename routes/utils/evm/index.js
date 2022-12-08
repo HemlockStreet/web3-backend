@@ -23,7 +23,7 @@ class Evm {
       const { message, signature, address } = req.body.user;
       const signer = ethers.utils.verifyMessage(message, signature);
       if (address !== signer) return rejectAs('stolen');
-      req.userData = { address, ip: req.ip };
+      req.userData = { address, ip: req.ip, timestamp: new Date() };
       next();
     } catch {
       return rejectAs('invalid');
