@@ -25,11 +25,11 @@ module.exports = (app) => {
       (req, res) => auth.handleLogin(req, res) // login
     )
     .patch(
-      (req, res, next) => auth.rtknValidation(req, res, next),
+      (req, res, next) => auth.rtknValidation(req, res, next), // get new rtkn & atkn
       (req, res) => auth.handleLogin(req, res) // refresh
     )
     .delete(
-      (req, res, next) => auth.rtknValidation(req, res, next),
+      (req, res, next) => auth.rtknValidation(req, res, next), // prevent randos from logging other people out
       (req, res) => auth.handleLogout(req, res) // logout
     );
 
