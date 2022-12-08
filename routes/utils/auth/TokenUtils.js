@@ -36,6 +36,15 @@ class TokenUtils {
   decode(token) {
     return jwt.decode(token);
   }
+
+  verify(type, token) {
+    const secret = type === 'atkn' ? this.access : this.refresh;
+    try {
+      return jwt.verify(token, secret);
+    } catch {
+      return;
+    }
+  }
 }
 
 module.exports = TokenUtils;

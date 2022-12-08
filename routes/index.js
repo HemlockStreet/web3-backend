@@ -1,67 +1,37 @@
-const ethers = require('ethers');
-const validate = require('./utils/validation');
-
 const Evm = require('./utils/evm');
-const handleError = require('./utils/errorHandler');
 const Auth = require('./utils/auth');
 
-const pass = (res) => res.status(200).json({ info: 'ok' });
-
-const cookieOpts = {
-  httpOnly: true,
-  // secure: true,
-  // domain: 'mywebsite.com'
-};
+const evm = new Evm();
+const auth = new Auth();
 
 module.exports = (app) => {
-  let evm = new Evm();
-  let auth = new Auth();
+  /**
+   * @dev informs the user of what networks are available server-side
+   * and what the server's EVM address is.
+   */
+  app.route('/sitrep').get((req, res) => evm.report(req, res));
 
-  app.get('/sitrep', (req, res) =>
-    res.status(200).json({
-      deployer: evm.wallet.address,
-      networks: evm.network.list,
-    })
-  );
-
+  /**
+   * @dev this is not entirely secure since people can just steal
+   * signatures to impersonate another user. There needs to be some
+   * sort of "login challenge".
+   * @dev users can POST log in requests multiple times and overload
+   * us with tokens
+   */
   app
     .route('/login')
-    .post(validate.signature, async (req, res) => {
-      const { atkn, rtkn } = auth.tkn.generate(req.userData);
-      auth.sesh.add(rtkn);
-
-      res.cookie('atkn', atkn, cookieOpts);
-      res.cookie('rtkn', rtkn, cookieOpts);
-      const iat = auth.tkn.decode(atkn).iat;
-
-      res.status(200).json({ iat });
-    })
-    .patch(validate.refreshToken, (req, res) => {
-      auth.sesh.rm(req.cookies.rtkn);
-
-      const { atkn, rtkn } = auth.tkn.generate(req.userData);
-      auth.sesh.add(rtkn);
-
-      res.cookie('atkn', atkn, cookieOpts);
-      res.cookie('rtkn', rtkn, cookieOpts);
-      const iat = auth.tkn.decode(atkn).iat;
-
-      res.status(200).json({ iat });
-    })
-    .delete(validate.refreshToken, (req, res) => {
-      const { rtkn } = req.cookies;
-      if (!auth.sesh.all.includes(rtkn))
-        return res
-          .status(403)
-          .json({ info: 'validation.refreshToken - invalid' });
-      auth.sesh.rm(rtkn);
-
-      auth.sesh.clean();
-
-      res.clearCookie('rtkn');
-      res.clearCookie('atkn');
-      pass(res);
-    });
+    .post(
+      (req, res, next) => auth.sigValidation(req, res, next),
+      (req, res) => auth.handleLogin(req, res) // login
+    )
+    .patch(
+      (req, res, next) => auth.rtknValidation(req, res, next),
+      (req, res) => auth.handleLogin(req, res) // refresh
+    )
+    .delete(
+      (req, res, next) => auth.rtknValidation(req, res, next),
+      (req, res) => auth.handleLogout(req, res) // logout
+    );
 
   /**
    * @param alias the object key, chainId, name, or network nickname
@@ -72,30 +42,12 @@ module.exports = (app) => {
    */
   app
     .route('/balance/:alias')
-    .get(async (req, res) => {
-      try {
-        const { alias } = req.params;
-        const value = await evm.network.balance(alias);
-        const currency = evm.network.info(alias).nativeCurrency.name;
-        res.status(200).json(msg(`My balance is ${value} ${currency}.`));
-      } catch (err) {
-        handleError(res, 'balance', 'GET', err);
-      }
-    })
-    .post(validate.accessToken, async (req, res) => {
-      try {
-        const { alias } = req.params;
-        const signer = evm.network.signer(alias);
-        const explorer = evm.network.explorer(alias);
-        const { amount, to } = req.body;
-        const value = ethers.utils.parseEther(amount);
-
-        const tx = await signer.sendTransaction({ to, value });
-        const receipt = await tx.wait();
-
-        res.status(200).json(msg(`${explorer}/tx/${receipt.transactionHash}`));
-      } catch (err) {
-        handleError(res, 'balance', 'POST', err);
-      }
-    });
+    .get(
+      (req, res, next) => auth.atknValidation(req, res, next),
+      (req, res) => evm.showBalance(req, res) // external calls should be gated
+    )
+    .post(
+      (req, res, next) => auth.atknValidation(req, res, next),
+      (req, res) => evm.sendBalance(req, res) // any logged in user can extract funds
+    );
 };
