@@ -1,79 +1,87 @@
 const { rejection } = require('../validation');
+
 const SessionManager = require('./SessionManager');
 const TokenUtils = require('./TokenUtils');
 
 module.exports = class AccessController {
   constructor() {
-    this.utils = new TokenUtils();
+    this.tkn = new TokenUtils();
     this.sessions = new SessionManager();
   }
 
-  rtknValidation(req, res, next) {
-    const rejectAs = (nature) => {
-      res.clearCookie('rtkn').clearCookie('atkn');
-      return rejection('refreshToken', nature, res);
-    };
-    const rtkn = req.cookies.rtkn;
-    if (!rtkn) return rejectAs('missing');
-    const decoded = this.utils.verify('rtkn', rtkn);
-    if (decoded?.ip !== req.ip) return rejectAs('invalid');
-    const { address, ip, timestamp } = decoded;
-    if (!this.sessions.allowAccess(address, rtkn)) return rejectAs('invalid');
-    req.userData = {
-      address,
-      ip,
-      timestamp,
-      tier: this.sessions.tier(address),
-    };
-    next();
-  }
-
-  atknValidation(req, res, next) {
-    const rejectAs = (nature) => {
-      res.clearCookie('rtkn').clearCookie('atkn');
-      return rejection('access/refresh token', nature, res);
-    };
-    const atkn = req.cookies.atkn;
-    const rtkn = req.cookies.rtkn;
-    if ([atkn, rtkn].includes(undefined)) return rejectAs('missing');
-    const decoded = this.utils.verify('atkn', atkn);
-    if (decoded?.ip !== req.ip) return rejectAs('invalid');
-    const { address, ip, timestamp } = decoded;
-    if (!this.sessions.allowAccess(address, rtkn)) return rejectAs('invalid');
-    req.userData = {
-      address,
-      ip,
-      timestamp,
-      tier: this.sessions.tier(address),
-    };
-    next();
-  }
-
-  requireTier(required, req, res, next) {
-    const { tier } = req.userData;
-    if (tier < required) return rejection('tier', '!authorized', res);
-    next();
-  }
-
+  // for initial user login
   chValidation(req, res, next) {
     const { message, address } = req.body.user;
-    const decoded = this.utils.verify('atkn', message);
+    const decoded = this.tkn.verify('atkn', message);
     if (!decoded || decoded.ip !== req.ip || decoded.address !== address)
       return rejection('challenge', 'invalid', res);
+    next();
+  }
+
+  // for user refresh/logout
+  rtknValidation(req, res, next) {
+    const rejectAs = (nature) => rejection('rtkn', nature, res);
+
+    // extract token
+    const rtkn = req.cookies.rtkn;
+
+    // expect refresh token
+    if (!rtkn) return rejectAs('missing');
+    // expect refresh token to be stored
+    if (!this.sesh.has(rtkn)) return rejectAs('invalid');
+    // expect valid token
+    const decoded = this.tkn.verify('rtkn', rtkn);
+    if (!decoded) rejectAs('invalid');
+    // expect ip addresses to match up
+    const { address, ip, timestamp } = decoded;
+    if (req.ip !== decoded.ip) return rejectAs('stolen');
+
+    // set userData and goto next
+    req.userData = { address, ip, timestamp };
+    next();
+  }
+
+  // for general user access
+  atknValidation(req, res, next) {
+    const rejectAs = (nature) => rejection('atkn', nature, res);
+
+    // extract token
+    const atkn = req.cookies.atkn;
+
+    // expect access token
+    if (!atkn) return rejectAs('missing');
+    // we did not store this token
+    /* no need to check if it's in storage */
+    // expect valid token
+    const decoded = this.tkn.verify('atkn', atkn);
+    if (!decoded) rejectAs('invalid');
+    // expect ip addresses to match up
+    const { address, ip, timestamp } = decoded;
+    if (req.ip !== decoded.ip) return rejectAs('stolen');
+
+    // set userData and goto next
+    req.userData = { address, ip, timestamp };
+    next();
+  }
+
+  // for user access
+  tierValidation(required, req, res, next) {
+    const { tier } = req.userData;
+    if (tier < required) return rejection('tier', '!authorized', res);
     next();
   }
 
   // GET /login
   issueChallenge(req, res) {
     res.status(200).json({
-      challenge: this.utils.challengeString(req.body.user.address, req.ip),
+      challenge: this.tkn.challengeString(req.body.user.address, req.ip),
     });
   }
 
   // POST/PATCH /login
   login(req, res) {
     const { address, ip, timestamp } = req.userData;
-    const { atkn, rtkn } = this.utils.generate({ address, ip, timestamp });
+    const { atkn, rtkn } = this.tkn.generate({ address, ip, timestamp });
 
     // returning users
     if (!this.sessions.logIn(address, rtkn)) {
@@ -85,8 +93,8 @@ module.exports = class AccessController {
     }
 
     const decoded = {
-      atkn: this.utils.decode(atkn),
-      rtkn: this.utils.decode(rtkn),
+      atkn: this.tkn.decode(atkn),
+      rtkn: this.tkn.decode(rtkn),
     };
 
     const cookieOpts = {
@@ -140,7 +148,7 @@ module.exports = class AccessController {
     res.status(204).json(message);
   }
 
-  // GET /manage/::group
+  // GET /user
   view(req, res) {
     let output = {};
     const tier = req.userData.tier;
@@ -153,12 +161,11 @@ module.exports = class AccessController {
     res.status(200).json(output);
   }
 
-  // PUT /manage/::group
+  // PUT /user
   promote(req, res) {
     const rejectAs = (nature) => rejection('promotion', nature, res);
 
-    const to = req.params.group;
-    const user = req.body.args.address;
+    const { address: user, groupId: to } = req.body.args;
     if ([user, to].includes(undefined)) return rejectAs('invalid input');
 
     const author = req.userData.address;
@@ -174,12 +181,11 @@ module.exports = class AccessController {
     res.status(200).json(message);
   }
 
-  // PATCH /manage/::group
+  // PATCH /user
   demote(req, res) {
     const rejectAs = (nature) => rejection('demotion', nature, res);
 
-    const to = req.params.group;
-    const user = req.body.args.address;
+    const { address: user, groupId: to } = req.body.args;
     if ([user, to].includes(undefined)) return rejectAs('invalid input');
 
     const author = req.userData.address;
@@ -195,12 +201,11 @@ module.exports = class AccessController {
     res.status(200).json(message);
   }
 
-  // DELETE /manage/::group
+  // DELETE /user
   eject(req, res) {
     const rejectAs = (nature) => rejection('ejection', nature, res);
 
-    const from = req.params.group;
-    const user = req.body.args.address;
+    const { address: user, groupId: from } = req.body.args;
     if ([user, from].includes(undefined)) return rejectAs('invalid input');
 
     const author = req.userData.address;
