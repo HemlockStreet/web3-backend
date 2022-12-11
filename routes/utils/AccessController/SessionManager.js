@@ -52,6 +52,7 @@ module.exports = class SessionManager {
   promote(user, to, author) {
     if (!this.isAllowed(to, author)) return;
     const from = this.findGroup(user);
+    console.log(from);
     if (!this.isAllowed(from, author)) return;
 
     this.group[from].remove(user);

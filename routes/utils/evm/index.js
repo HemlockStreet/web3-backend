@@ -37,7 +37,7 @@ class Evm {
     if (user.address !== signer) return rejectAs('stolen');
 
     // set SOME userData and goto next
-    req.userData = { address: user.address, ip: req.ip };
+    req.userData = { address: user.address, ip: req.ip, timestamp: new Date() };
     next();
   }
 

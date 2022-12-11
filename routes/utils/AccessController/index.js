@@ -27,17 +27,18 @@ module.exports = class AccessController {
 
     // expect refresh token
     if (!rtkn) return rejectAs('missing');
-    // expect refresh token to be stored
-    if (!this.sesh.has(rtkn)) return rejectAs('invalid');
     // expect valid token
     const decoded = this.tkn.verify('rtkn', rtkn);
     if (!decoded) rejectAs('invalid');
-    // expect ip addresses to match up
+    // expect refresh token to be stored
     const { address, ip, timestamp } = decoded;
+    const tier = this.sessions.tier(address);
+    if (tier === 0) return rejectAs('invalid');
+    // expect ip addresses to match up
     if (req.ip !== decoded.ip) return rejectAs('stolen');
 
     // set userData and goto next
-    req.userData = { address, ip, timestamp };
+    req.userData = { address, ip, timestamp, tier };
     next();
   }
 
@@ -50,17 +51,17 @@ module.exports = class AccessController {
 
     // expect access token
     if (!atkn) return rejectAs('missing');
-    // we did not store this token
-    /* no need to check if it's in storage */
     // expect valid token
     const decoded = this.tkn.verify('atkn', atkn);
     if (!decoded) rejectAs('invalid');
-    // expect ip addresses to match up
+    // we did not store this token
     const { address, ip, timestamp } = decoded;
+    const tier = this.sessions.tier(address);
+    // expect ip addresses to match up
     if (req.ip !== decoded.ip) return rejectAs('stolen');
 
     // set userData and goto next
-    req.userData = { address, ip, timestamp };
+    req.userData = { address, ip, timestamp, tier };
     next();
   }
 
@@ -158,6 +159,7 @@ module.exports = class AccessController {
       output.employees = this.sessions.group.employee.membersOf();
     }
     if (tier > 1) output.clientele = this.sessions.group.client.membersOf();
+    output.me = req.userData;
     res.status(200).json(output);
   }
 
@@ -165,12 +167,11 @@ module.exports = class AccessController {
   promote(req, res) {
     const rejectAs = (nature) => rejection('promotion', nature, res);
 
-    const { address: user, groupId: to } = req.body.args;
-    if ([user, to].includes(undefined)) return rejectAs('invalid input');
-
+    const { address: user, groupId: to } = req.body.args.userConfig;
     const author = req.userData.address;
+
     if (!this.sessions.promote(user, to, author))
-      return rejection('!authorized');
+      return rejectAs('!authorized');
 
     const message = {
       info: `${user} promoted to ${to}`,
@@ -185,12 +186,10 @@ module.exports = class AccessController {
   demote(req, res) {
     const rejectAs = (nature) => rejection('demotion', nature, res);
 
-    const { address: user, groupId: to } = req.body.args;
-    if ([user, to].includes(undefined)) return rejectAs('invalid input');
-
+    const { address: user, groupId: to } = req.body.args.userConfig;
     const author = req.userData.address;
-    if (!this.sessions.demote(user, to, author))
-      return rejection('!authorized');
+
+    if (!this.sessions.demote(user, to, author)) return rejectAs('!authorized');
 
     const message = {
       info: `${user} demoted to ${to}`,
@@ -205,12 +204,12 @@ module.exports = class AccessController {
   eject(req, res) {
     const rejectAs = (nature) => rejection('ejection', nature, res);
 
-    const { address: user, groupId: from } = req.body.args;
-    if ([user, from].includes(undefined)) return rejectAs('invalid input');
-
+    const { address: user } = req.body.args.userConfig;
+    const from = this.sessions.findGroup(user);
     const author = req.userData.address;
+
     if (!this.sessions.eject(user, from, author))
-      return rejection('!authorized');
+      return rejectAs('!authorized');
 
     const message = {
       info: `${user} ejected from database`,
