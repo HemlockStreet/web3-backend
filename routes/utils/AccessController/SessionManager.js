@@ -29,7 +29,7 @@ module.exports = class SessionManager {
     if (currentTier === 7) return 'wheel';
     else if (currentTier === 5) return 'manager';
     else if (currentTier === 3) return 'employee';
-    else if (currentTier === 1) return 'client';
+    else if ([0, 1].includes(currentTier)) return 'client';
   }
 
   isAllowed(groupTo, author) {
