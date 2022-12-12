@@ -5,8 +5,9 @@ package-lock.json
 **/Sessions.json
 **/EncryptionTokens.json
 **/SessionData.json
+testWallets.json
 
-
+.nyc_output
 logs
 coverage
 build/Release
