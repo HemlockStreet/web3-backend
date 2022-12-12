@@ -185,7 +185,7 @@ describe('app', () => {
     });
   });
 
-  xcontext('/user', () => {
+  context('/user', () => {
     let sessions = [];
 
     beforeEach(async () => {
@@ -208,15 +208,15 @@ describe('app', () => {
       done();
     });
 
-    it('PUTs tiered user data', (done) => {
+    it('PUTs allow promotion', (done) => {
       done();
     });
 
-    it('PATCHes tiered user data', (done) => {
+    it('PATCHes allow demotion', (done) => {
       done();
     });
 
-    it('DELETEs tiered user data', (done) => {
+    it('DELETEs remove users', (done) => {
       done();
     });
   });
