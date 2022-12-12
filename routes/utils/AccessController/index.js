@@ -1,102 +1,32 @@
 const { rejection } = require('../validation');
+const TokenManager = require('./TokenManager');
 
-const SessionManager = require('./SessionManager');
-const TokenUtils = require('./TokenUtils');
-
+/**
+ * Glossary
+ * ctkn === Challenge Token
+ * atkn === Access Token
+ * rtkn === Refresh Token
+ */
 module.exports = class AccessController {
   constructor() {
-    this.tkn = new TokenUtils();
-    this.sessions = new SessionManager();
+    this.tkn = new TokenManager();
   }
 
-  // for initial user login
-  chValidation(req, res, next) {
-    const { message, address } = req.body.user;
-    const decoded = this.tkn.verify('atkn', message);
-    if (!decoded || decoded.ip !== req.ip || decoded.address !== address)
-      return rejection('challenge', 'invalid', res);
-    next();
-  }
-
-  // for user refresh/logout
-  rtknValidation(req, res, next) {
-    const rejectAs = (nature) => rejection('rtkn', nature, res);
-
-    // extract token
-    const rtkn = req.cookies.rtkn;
-
-    // expect refresh token
-    if (!rtkn) return rejectAs('missing');
-    // expect valid token
-    const decoded = this.tkn.verify('rtkn', rtkn);
-    if (!decoded) rejectAs('invalid');
-    // expect refresh token to be stored
-    const { address, ip, timestamp } = decoded;
-    const tier = this.sessions.tier(address);
-    if (tier === 0) return rejectAs('invalid');
-    // expect ip addresses to match up
-    if (req.ip !== decoded.ip) return rejectAs('stolen');
-
-    // set userData and goto next
-    req.userData = { address, ip, timestamp, tier };
-    next();
-  }
-
-  // for general user access
-  atknValidation(req, res, next) {
-    const rejectAs = (nature) => rejection('atkn', nature, res);
-
-    // extract token
-    const atkn = req.cookies.atkn;
-
-    // expect access token
-    if (!atkn) return rejectAs('missing');
-    // expect valid token
-    const decoded = this.tkn.verify('atkn', atkn);
-    if (!decoded) rejectAs('invalid');
-    // we did not store this token
-    const { address, ip, timestamp } = decoded;
-    const tier = this.sessions.tier(address);
-    // expect ip addresses to match up
-    if (req.ip !== decoded.ip) return rejectAs('stolen');
-
-    // set userData and goto next
-    req.userData = { address, ip, timestamp, tier };
-    next();
-  }
-
-  // for user access
-  tierValidation(required, req, res, next) {
-    const { tier } = req.userData;
-    if (tier < required) return rejection('tier', '!authorized', res);
-    next();
-  }
-
-  // GET /login
-  issueChallenge(req, res) {
-    res.status(200).json({
-      challenge: this.tkn.challengeString(req.body.user.address, req.ip),
-    });
+  /**
+   * @dev login step 1 (GET /login)
+   * Issues challenge token to client. This expires in 5 minutes. Send this request
+   * as soon as the user hits "sign in". (REQUIRES USER EVM ADDRESS)
+   */
+  getChallenge(req, res) {
+    const challenge = this.tkn.utils.challengeString(req.ip);
+    res.status(200).json({ challenge });
   }
 
   // POST/PATCH /login
   login(req, res) {
     const { address, ip, timestamp } = req.userData;
-    const { atkn, rtkn } = this.tkn.generate({ address, ip, timestamp });
-
-    // returning users
-    if (!this.sessions.logIn(address, rtkn)) {
-      // new users
-      const defaultGroup =
-        this.sessions.group.wheel.membersOf().length === 0 ? 'wheel' : 'client';
-      this.sessions.promote(address, defaultGroup, address);
-      this.sessions.logIn(address, rtkn);
-    }
-
-    const decoded = {
-      atkn: this.tkn.decode(atkn),
-      rtkn: this.tkn.decode(rtkn),
-    };
+    const tokens = this.tkn.utils.generate({ address, ip, timestamp });
+    const decoded = this.tkn.logUserIn(address, tokens);
 
     const cookieOpts = {
       httpOnly: true,
@@ -111,20 +41,20 @@ module.exports = class AccessController {
     };
     console.log(message);
     res
-      .cookie('atkn', atkn, cookieOpts)
-      .cookie('rtkn', rtkn, cookieOpts)
+      .cookie('atkn', tokens.atkn, cookieOpts)
+      .cookie('rtkn', tokens.rtkn, cookieOpts)
       .status(200)
       .json({
         atkn: { iat: decoded.atkn.iat, exp: decoded.atkn.exp },
         rtkn: { iat: decoded.rtkn.iat, exp: decoded.rtkn.exp },
-        accessTier: this.sessions.tier(address),
+        accessTier: this.tkn.roles.rolesOf(address),
       });
   }
 
   // PUT /login
   logout(req, res) {
     const { address } = req.userData;
-    this.sessions.logOut(address);
+    this.tkn.logUserOut(address);
 
     const message = {
       info: `logged out`,
@@ -135,15 +65,15 @@ module.exports = class AccessController {
     res.status(204).json(message);
   }
 
-  // DELETE /login
+  // EMERGENCY FUNCTION
   logoutAll(req, res) {
-    const { address } = req.userData;
-    this.sessions.clearAllSessions();
+    const { address, timestamp } = req.userData;
+    this.tkn.clear();
 
     const message = {
       info: `logged out all users`,
       by: address,
-      timestamp: new Date(),
+      timestamp,
     };
     console.log(message);
     res.status(204).json(message);

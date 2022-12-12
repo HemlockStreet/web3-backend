@@ -1,4 +1,4 @@
-module.exports = (app, evm, ctrl) => {
+module.exports = (app, valid, evm, ctrl) => {
   app
     .route('/balance')
     .get(

@@ -1,7 +1,5 @@
 const { ethers } = require('ethers');
 
-const { rejection } = require('../validation');
-
 const Wallet = require('./Wallet');
 const Network = require('./Network');
 
@@ -18,42 +16,6 @@ class Evm {
       deployer: this.wallet.address,
       networks: this.network.publicInfo(),
     });
-  }
-
-  sigValidation(req, res, next) {
-    const rejectAs = (nature) => rejection('signature', nature, res);
-
-    // expect login arguments
-    const user = req.body.user;
-    if (!user) rejectAs('missing');
-    // expect valid signature
-    let signer;
-    try {
-      signer = ethers.utils.verifyMessage(user.message, user.signature);
-    } catch {
-      return rejectAs('invalid');
-    }
-    // expect address match
-    if (user.address !== signer) return rejectAs('stolen');
-
-    // set SOME userData and goto next
-    req.userData = { address: user.address, ip: req.ip, timestamp: new Date() };
-    next();
-  }
-
-  netValidation(req, res, next) {
-    try {
-      const { network } = req.body;
-      this.network.info(network);
-      req.network = network;
-      next();
-    } catch {
-      rejection(
-        `netValidation @${network ? network : 'undefined network'}`,
-        'invalid',
-        res
-      );
-    }
   }
 
   // GET /network

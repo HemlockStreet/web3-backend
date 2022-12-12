@@ -3,7 +3,7 @@
  *  network: string - alias,
  * }
  */
-module.exports = (app, evm, ctrl) => {
+module.exports = (app, valid, evm, ctrl) => {
   app
     .route('/network')
     .get(

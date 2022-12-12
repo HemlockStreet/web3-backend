@@ -1,7 +1,8 @@
 {
   "name": "web3-backend",
   "scripts": {
-    "dev": "nodemon app.js"
+    "test": "cross-env NODE_ENV=dev mocha './test/**.test.js'",
+    "dev": "cross-env NODE_ENV=dev nodemon app.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.0",
@@ -14,12 +15,22 @@
     "jsonwebtoken": "^8.5.1"
   },
   "devDependencies": {
+    "chai": "^4.3.7",
+    "chai-as-promised": "^7.1.1",
     "concurrently": "^7.6.0",
-    "nodemon": "^2.0.20"
+    "cross-env": "^7.0.3",
+    "mocha": "^10.2.0",
+    "nodemon": "^2.0.20",
+    "request-cookies": "^1.1.0",
+    "rewire": "^6.0.0",
+    "sinon": "^15.0.0",
+    "sinon-chai": "^3.7.0",
+    "supertest": "^6.3.3"
   },
   "nodemonConfig": {
     "ignore": [
-      "*/*.json"
+      "*/*.json",
+      "*/*.test.js"
     ]
   }
 }

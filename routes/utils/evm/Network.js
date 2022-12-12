@@ -23,11 +23,11 @@ module.exports = class Network extends LocalData {
         name: details.name,
         network: details.network,
         nativeCurrency: details.nativeCurrency,
-        ens: details.ens?.address,
-        multicall: details.multicall?.address,
         publicRpc: details.rpc,
         explorer: details.explorer.url,
       };
+      if (details.ens) result[name].ens = details.ens.address;
+      if (details.multicall) result[name].multicall = details.multicall.address;
     });
     return result;
   }

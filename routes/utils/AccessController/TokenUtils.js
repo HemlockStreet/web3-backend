@@ -32,9 +32,9 @@ module.exports = class TokenUtils extends LocalData {
     if (!this.data.access || !this.data.refresh) this.reset();
   }
 
-  challengeString(address, ip) {
+  challengeString(ip) {
     const contents = this.randomString();
-    return jwt.sign({ contents, address, ip }, this.data.access, {
+    return jwt.sign({ contents, ip }, this.data.access, {
       expiresIn: '5m',
     });
   }
