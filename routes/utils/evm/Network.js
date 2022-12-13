@@ -42,8 +42,7 @@ module.exports = class Network extends LocalData {
       }
     });
 
-    if (entry) return entry;
-    throw new Error(`Evm.Network.info - could not find ${alias}`);
+    return entry;
   }
 
   explorer(alias) {

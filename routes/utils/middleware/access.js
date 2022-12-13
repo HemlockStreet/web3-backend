@@ -19,16 +19,24 @@ module.exports = class AccessMiddleware {
     if (req.ip !== decoded.ip) return rejectAs('invalid');
 
     // goto next
+    req.userData.tier = this.ctrl.tkn.roles.scopeTier(req.userData.scope);
+    next();
+  }
+
+  scope(required, req, res, next) {
+    if (req.userData.tier < required)
+      return rejection('accessTier', '!authorized', res);
     next();
   }
 
   roles(required, req, res, next) {
-    let hasRequiredRole;
-    required.forEach((role) => {
-      if (this.ctrl.tkn.roles.hasRole(req.userData.address, role))
-        hasRequiredRole = true;
-    });
-    if (!hasRequiredRole) return rejection('roles', '!authorized', res);
+    if (req.userData.scope !== 'root') {
+      let hasRequiredRole;
+      required.forEach((role) => {
+        if (req.userData.roles.includes(role)) hasRequiredRole = true;
+      });
+      if (!hasRequiredRole) return rejection('roles', '!authorized', res);
+    }
     next();
   }
 };

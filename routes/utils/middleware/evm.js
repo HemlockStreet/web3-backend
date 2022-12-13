@@ -14,7 +14,8 @@ module.exports = class EvmMiddleware {
   network(req, res, next) {
     try {
       const { network } = req.body;
-      this.evm.network.info(network);
+      if (!this.evm.network.info(network))
+        throw new Error('invalid network').code(403);
       req.network = network;
       next();
     } catch {

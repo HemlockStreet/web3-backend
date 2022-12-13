@@ -18,12 +18,9 @@ const app = express()
 
 route(app);
 
-// if ((process.env.NODE_ENV = 'development')) {
-//   app.post('/throw', (req, res) => {
-//     const { body } = req.body;
-//     res.status(200).json({ body });
-//   });
-// }
+if (process.env.NODE_ENV === 'development') {
+  app.post('/throw', (req, res) => console.nonexistentMethod(req, res));
+}
 
 app.listen(port, () => console.log(`\nListening On port:${port}\n`));
 

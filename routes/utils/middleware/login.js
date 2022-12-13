@@ -73,7 +73,13 @@ module.exports = class LoginMiddleware {
     if (req.ip !== decoded.ip) return rejectAs('invalid');
 
     // set userData and goto next
-    req.userData = { address, ip, timestamp: new Date() };
+    req.userData = {
+      address,
+      ip,
+      timestamp: new Date(),
+      scope: this.ctrl.tkn.roles.scopeOf(address),
+      roles: this.ctrl.tkn.roles.rolesOf(address),
+    };
     next();
   }
 };

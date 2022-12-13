@@ -20,12 +20,14 @@ class Evm {
 
   // GET /network
   viewNetwork(req, res) {
-    res.status(200).json(this.network.info(req.network));
+    res.status(200).json(this.network.data);
   }
 
   // PUT /network
   async editNetwork(req, res) {
-    const alias = req.network;
+    const alias = req.body.network;
+    if (!alias) return res.status(400).json({ info: '!req.body.network' });
+    console.log(alias);
     const verdict = await this.network.register(
       alias,
       req.body.args.networkDetails

@@ -47,7 +47,8 @@ module.exports = class AccessController {
       .json({
         atkn: { iat: decoded.atkn.iat, exp: decoded.atkn.exp },
         rtkn: { iat: decoded.rtkn.iat, exp: decoded.rtkn.exp },
-        accessTier: this.tkn.roles.rolesOf(address),
+        scope: this.tkn.roles.scopeOf(address),
+        roles: this.tkn.roles.rolesOf(address),
       });
   }
 
@@ -83,29 +84,36 @@ module.exports = class AccessController {
   view(req, res) {
     let output = {};
     const tier = req.userData.tier;
-    if (tier > 3) {
-      output.wheel = this.sessions.group.wheel.membersOf();
-      output.managers = this.sessions.group.manager.membersOf();
-      output.employees = this.sessions.group.employee.membersOf();
+    if (tier >= 7) output.root = this.tkn.roles.scopeUsers('root');
+    if (tier >= 5) output.admins = this.tkn.roles.scopeUsers('admin');
+    if (tier >= 3) {
+      output.managers = this.tkn.roles.scopeUsers('manager');
+      output.clientele = this.tkn.roles.scopeUsers('user');
+      output.employees = this.tkn.roles.scopeUsers('employee');
     }
-    if (tier > 1) output.clientele = this.sessions.group.client.membersOf();
     output.me = req.userData;
     res.status(200).json(output);
   }
 
   // PUT /user
-  promote(req, res) {
-    const rejectAs = (nature) => rejection('promotion', nature, res);
-
-    const { address: user, groupId: to } = req.body.args.userConfig;
-    const author = req.userData.address;
-
-    if (!this.sessions.promote(user, to, author))
+  editScope(req, res) {
+    const rejectAs = (nature) => rejection('scope edit', nature, res);
+    const { address, groupId } = req.body.args.userConfig;
+    const addressScope = this.tkn.roles.scopeOf(address);
+    if (
+      (req.userData.scope === 'root' && address === req.userData.address) ||
+      (req.userData.scope !== 'root' &&
+        (req.userData.tier < this.tkn.roles.scopeTier(groupId) ||
+          req.userData.tier <= this.tkn.roles.scopeTier(addressScope)))
+    )
       return rejectAs('!authorized');
 
+    if (!this.tkn.roles.setScope(address, groupId))
+      return rejectAs('invalid scope');
+
     const message = {
-      info: `${user} promoted to ${to}`,
-      by: author,
+      info: `set ${address} scope to ${groupId}`,
+      by: req.userData.address,
       timestamp: new Date(),
     };
     console.log(message);
@@ -113,17 +121,27 @@ module.exports = class AccessController {
   }
 
   // PATCH /user
-  demote(req, res) {
-    const rejectAs = (nature) => rejection('demotion', nature, res);
+  editRoles(req, res) {
+    const rejectAs = (nature) => rejection('role edit', nature, res);
 
-    const { address: user, groupId: to } = req.body.args.userConfig;
-    const author = req.userData.address;
+    const { address, tag, add } = req.body.args.userConfig;
+    if (typeof tag !== 'string') return rejectAs('invalid role');
+    const addressScope = this.tkn.roles.scopeOf(address);
+    if (
+      (req.userData.scope === 'root' && address === req.userData.address) ||
+      (req.userData.scope !== 'root' &&
+        req.userData.tier <= this.tkn.roles.scopeTier(addressScope))
+    )
+      return rejectAs('!authorized');
 
-    if (!this.sessions.demote(user, to, author)) return rejectAs('!authorized');
+    if (add) {
+      if (!this.tkn.roles.addRole(address, tag))
+        return rejectAs('invalid user');
+    } else this.tkn.roles.rmRole(address, tag);
 
     const message = {
-      info: `${user} demoted to ${to}`,
-      by: author,
+      info: `${add ? 'granted' : 'revoked'} role: ${tag} to ${address}`,
+      by: req.userData.address,
       timestamp: new Date(),
     };
     console.log(message);
@@ -132,18 +150,23 @@ module.exports = class AccessController {
 
   // DELETE /user
   eject(req, res) {
-    const rejectAs = (nature) => rejection('ejection', nature, res);
+    const rejectAs = (nature) => rejection('account deletion', nature, res);
 
-    const { address: user } = req.body.args.userConfig;
-    const from = this.sessions.findGroup(user);
-    const author = req.userData.address;
+    const { address } = req.body.args.userConfig;
+    const addressScope = this.tkn.roles.scopeOf(address);
 
-    if (!this.sessions.eject(user, from, author))
+    if (
+      address !== req.userData.address &&
+      (req.userData.tier <= this.tkn.roles.scopeTier(addressScope) ||
+        req.userData.tier < 3)
+    )
       return rejectAs('!authorized');
 
+    this.tkn.roles.rmUser(address);
+
     const message = {
-      info: `${user} ejected from database`,
-      by: author,
+      info: `${address} ejected from database`,
+      by: req.userData.address,
       timestamp: new Date(),
     };
     console.log(message);

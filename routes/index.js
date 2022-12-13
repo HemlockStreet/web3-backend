@@ -27,7 +27,7 @@ module.exports = (app) => {
     .put(
       (req, res, next) => valid.login.rtkn(req, res, next),
       (req, res, next) => valid.access.atkn(req, res, next),
-      (req, res, next) => valid.access.roles(['root', 'admin'], req, res, next),
+      (req, res, next) => valid.access.scope(5, req, res, next),
       (req, res) => ctrl.logoutAll(req, res) // refresh
     )
     .patch(
@@ -42,22 +42,25 @@ module.exports = (app) => {
   app
     .route('/user')
     .get(
-      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
       (req, res) => ctrl.view(req, res) // whois in group members
     )
     .put(
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
-      (req, res) => ctrl.promote(req, res) // promote members
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(3, req, res, next),
+      (req, res) => ctrl.editScope(req, res) // edit member Scope
     )
     .patch(
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
-      (req, res) => ctrl.demote(req, res) // demote members
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(3, req, res, next),
+      (req, res) => ctrl.editRoles(req, res) // edit member roles
     )
     .delete(
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
       (req, res) => ctrl.eject(req, res) // remove members
     );
 
@@ -69,35 +72,44 @@ module.exports = (app) => {
   app
     .route('/network')
     .get(
-      (req, res, next) => evm.netValidation(req, res, next),
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(3, req, res, next),
+      (req, res, next) => valid.access.roles(['network'], req, res, next),
       (req, res) => evm.viewNetwork(req, res) // view network details
     )
     .put(
-      (req, res, next) => evm.netValidation(req, res, next),
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(3, req, res, next),
+      (req, res, next) => valid.access.roles(['network'], req, res, next),
       (req, res) => evm.editNetwork(req, res) // manage network details
     )
     .delete(
-      (req, res, next) => evm.netValidation(req, res, next),
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(3, req, res, next),
+      (req, res, next) => valid.access.roles(['network'], req, res, next),
+      (req, res, next) => valid.evm.network(req, res, next),
       (req, res) => evm.removeNetwork(req, res) // remove network
     );
 
   app
     .route('/balance')
     .get(
-      (req, res, next) => evm.netValidation(req, res, next),
-      (req, res, next) => ctrl.atknValidation(req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(5, req, res, next),
+      (req, res, next) => valid.access.roles(['finance'], req, res, next),
+      (req, res, next) => valid.evm.network(req, res, next),
       (req, res) => evm.fetchBalance(req, res) // fetch deployer balance
     )
     .patch(
-      (req, res, next) => evm.netValidation(req, res, next),
-      (req, res, next) => ctrl.atknValidation(req, res, next),
-      (req, res, next) => ctrl.tierValidation(5, req, res, next),
+      (req, res, next) => valid.login.rtkn(req, res, next),
+      (req, res, next) => valid.access.atkn(req, res, next),
+      (req, res, next) => valid.access.scope(5, req, res, next),
+      (req, res, next) => valid.access.roles(['finance'], req, res, next),
+      (req, res, next) => valid.evm.network(req, res, next),
       (req, res) => evm.sendBalance(req, res) // send deployer balance
     );
 };
