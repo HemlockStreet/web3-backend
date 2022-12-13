@@ -334,6 +334,56 @@ describe('app', () => {
 
     it('DELETEs remove users', async () => {});
   });
+
+  context('/network', async () => {
+    let sessions = [];
+
+    beforeEach(async () => {
+      for await (user of wallets) {
+        await logIn(user);
+        sessions.push(cookies);
+      }
+      await logIn();
+    });
+
+    afterEach(async () => {
+      for await (user of wallets) {
+        await logOut(user);
+        sessions.push(cookies);
+      }
+      sessions = [];
+    });
+
+    it('GETs tiered user data', async () => {});
+
+    it('PUTs allow promotion', async () => {});
+
+    it('DELETEs remove users', async () => {});
+  });
+
+  context('/balance', async () => {
+    let sessions = [];
+
+    beforeEach(async () => {
+      for await (user of wallets) {
+        await logIn(user);
+        sessions.push(cookies);
+      }
+      await logIn();
+    });
+
+    afterEach(async () => {
+      for await (user of wallets) {
+        await logOut(user);
+        sessions.push(cookies);
+      }
+      sessions = [];
+    });
+
+    it('GETs tiered user data', async () => {});
+
+    it('PATCHes allow promotion', async () => {});
+  });
 });
 
 toDelete.forEach((file) => {
