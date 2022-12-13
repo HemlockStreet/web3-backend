@@ -3,6 +3,7 @@ const toDelete = [
   'AccessController/EncryptionTokens',
   'AccessController/SessionData',
   'evm/WalletConfig',
+  'evm/ChainConfig',
 ];
 const ethers = require('ethers');
 function createWallet() {
@@ -968,25 +969,26 @@ describe('app', () => {
     });
 
     const backup = evm.network.data;
-    const networkDetails = evm.network.mainnet;
+    const networkDetails = backup.polygonMumbai;
+    let edited = backup;
     it('DELETEs remove networks', async () => {
       let response;
       response = await request(app)
         .delete('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'mainet' })
+        .send({ network: 'polygoMumbai' })
         .expect(500);
 
       response = await request(app)
         .delete('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'mainnet' })
+        .send({ network: 'polygonMumbai' })
         .expect(200);
 
       response = await request(app)
         .delete('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'mainnet' })
+        .send({ network: 'polygonMumbai' })
         .expect(500);
 
       response = await request(app)
@@ -994,8 +996,7 @@ describe('app', () => {
         .set('Cookie', sessions[2])
         .expect(200);
 
-      let edited = backup;
-      delete edited.mainnet;
+      delete edited.polygonMumbai;
       expect(response.body).to.deep.equal(edited);
     });
 
@@ -1011,18 +1012,21 @@ describe('app', () => {
       response = await request(app)
         .put('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'mainnet', args: { networkDetails } })
+        .send({ network: 'polygonMumbai', args: { networkDetails } })
         .expect(200);
 
       response = await request(app)
         .get('/network')
         .set('Cookie', sessions[2])
         .expect(200);
-      expect(response.body).to.deep.equal(backup);
+
+      edited.polygonMumbai = networkDetails;
+      edited.polygonMumbai.privateRpc = networkDetails.rpc;
+      expect(response.body).to.deep.equal(edited);
     });
   });
 
-  xcontext('/balance', async () => {
+  context('/balance', async () => {
     let sessions = [];
 
     beforeEach(async () => {
@@ -1041,9 +1045,35 @@ describe('app', () => {
       sessions = [];
     });
 
-    it('GETs deployer balance', async () => {});
+    it('GETs deployer balance', async () => {
+      let response;
+      const [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
+      for await (const sesh of [userSesh, managerSesh, empSesh]) {
+        await request(app)
+          .get('/balance')
+          .set('Cookie', sesh)
+          .send({ network: 'polygonMumbai' })
+          .expect(400);
+      }
+      for await (const sesh of [cookies, rootSesh, adminSesh]) {
+        response = await request(app)
+          .get('/balance')
+          .set('Cookie', sesh)
+          .send({ network: 'polygonMumbai' })
+          .expect(200);
+        expect(response.body)
+          .to.haveOwnProperty('info')
+          .to.equal('My balance is 0.0 Mumbai MATIC.');
+      }
+    });
 
-    it('PATCHes allow withdrawals', async () => {});
+    xit('gets setup', async () => {
+      // add balances from private wallet to deployer wallet
+    });
+
+    xit('PATCHes allow withdrawals', async () => {
+      //
+    });
   });
 
   context('cleanup', () => {
@@ -1051,6 +1081,10 @@ describe('app', () => {
       toDelete.forEach((file) => {
         const pathTo = `./routes/utils/${file}.json`;
         if (fs.existsSync(pathTo)) fs.rmSync(pathTo);
+        fs.copyFileSync(
+          './routes/utils/evm/ChainConfigBackup.json',
+          './routes/utils/evm/ChainConfig.json'
+        );
       });
     });
   });

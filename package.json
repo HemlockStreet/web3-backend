@@ -1,7 +1,7 @@
 {
   "name": "web3-backend",
   "scripts": {
-    "test": "cross-env NODE_ENV=development mocha \"./{,!(node_modules)/**/}*.test.js\" --exit",
+    "test": "cross-env NODE_ENV=development mocha \"./{,!(node_modules)/**/}*.test.js\" --timeout 60000 --exit",
     "coverage": "cross-env NODE_ENV=development nyc --reporter=text npm test",
     "dev": "cross-env NODE_ENV=development nodemon app.js"
   },

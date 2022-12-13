@@ -27,12 +27,11 @@ class Evm {
   async editNetwork(req, res) {
     const alias = req.body.network;
     if (!alias) return res.status(400).json({ info: '!req.body.network' });
-    console.log(alias);
+
     const verdict = await this.network.register(
       alias,
       req.body.args.networkDetails
     );
-
     let message = {};
 
     if (verdict !== 'pass') {

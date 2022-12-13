@@ -140,14 +140,16 @@ module.exports = class Network extends LocalData {
       }
 
       try {
-        await fetch(exUrl);
+        const response = await fetch(exUrl, { method: 'GET' });
+        if (response.status !== 200) throw new Error();
       } catch {
         throw new Error('invalid explorer url');
       }
 
-      if (exApi !== '') {
+      if (exApi) {
         try {
-          await fetch(exApi);
+          const response = await fetch(exApi, { method: 'GET' });
+          if (response.status !== 200) throw new Error();
         } catch {
           throw new Error('invalid explorer api url');
         }
@@ -167,14 +169,14 @@ module.exports = class Network extends LocalData {
   async register(alias, values) {
     const input = await this.inspect(values);
     if (typeof input === 'string') return input;
-    this.data[this.info(alias).alias] = input;
+    this.data[alias] = input;
     super.ingress(this.data);
     return 'pass';
   }
 
   remove(alias) {
     if (super.keys().length === 1) return;
-    delete this.data[this.info(alias).alias];
+    delete this.data[alias];
     super.ingress(this.data);
     return true;
   }
