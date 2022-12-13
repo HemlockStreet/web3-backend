@@ -5,10 +5,6 @@ const pathTo = `${__dirname}/EncryptionTokens.json`;
 
 const LocalData = require('../data/LocalData');
 module.exports = class TokenUtils extends LocalData {
-  update() {
-    super.egress();
-  }
-
   randomString() {
     return crypto.randomBytes(64).toString('hex');
   }
@@ -18,12 +14,12 @@ module.exports = class TokenUtils extends LocalData {
     const refresh = this.randomString();
     this.data = { access, refresh };
     super.ingress(this.data);
-    this.update();
+    super.egress();
   }
 
   constructor() {
     super(pathTo);
-    this.update();
+    super.egress();
     if (!this.data.access || !this.data.refresh) this.reset();
   }
 

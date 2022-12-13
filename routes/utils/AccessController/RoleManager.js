@@ -1,35 +1,30 @@
 const LocalData = require('../data/LocalData');
 module.exports = class RoleManager extends LocalData {
-  update() {
-    super.egress();
-  }
-
   saveData() {
     super.ingress(this.data);
-    this.update();
+    super.egress();
   }
 
   constructor() {
     super(`${__dirname}/SessionData.json`);
-
-    this.update();
+    super.egress();
   }
 
   // get user addresses/names
   usersOf() {
-    this.update();
+    super.egress();
     return super.keys();
   }
 
   // get user roles
   rolesOf(address) {
-    this.update();
+    super.egress();
     return this.data[address].roles;
   }
 
   // does the user have this role?
   hasRole(address, role) {
-    this.update();
+    super.egress();
     return this.rolesOf(address).includes(role);
   }
 
@@ -44,7 +39,7 @@ module.exports = class RoleManager extends LocalData {
 
   // does this user exist?
   hasUser(address) {
-    this.update();
+    super.egress();
     return this.usersOf().includes(address);
   }
 
