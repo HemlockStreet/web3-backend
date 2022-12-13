@@ -2,7 +2,6 @@ const fs = require('fs');
 const toDelete = [
   'AccessController/EncryptionTokens',
   'AccessController/SessionData',
-  'evm/WalletConfig',
 ];
 toDelete.forEach((file) => {
   const pathTo = `./routes/utils/${file}.json`;
@@ -308,7 +307,7 @@ describe('app', () => {
     });
   });
 
-  xcontext('/user', () => {
+  context('/user', async () => {
     let sessions = [];
 
     beforeEach(async () => {
@@ -327,30 +326,22 @@ describe('app', () => {
       sessions = [];
     });
 
-    it('GETs tiered user data', (done) => {
-      done();
-    });
+    it('GETs tiered user data', async () => {});
 
-    it('PUTs allow promotion', (done) => {
-      done();
-    });
+    it('PUTs allow promotion', async () => {});
 
-    it('PATCHes allow demotion', (done) => {
-      done();
-    });
+    it('PATCHes allow demotion', async () => {});
 
-    it('DELETEs remove users', (done) => {
-      done();
-    });
+    it('DELETEs remove users', async () => {});
   });
 });
 
 toDelete.forEach((file) => {
   const copy = `./routes/utils/${file}Backup.json`;
   if (fs.existsSync(copy)) {
-    const pathTo = `./routes/utils/${file}.json`;
-    fs.rmSync(pathTo);
-    fs.copyFileSync(copy, pathTo);
+    const current = `./routes/utils/${file}.json`;
+    fs.rmSync(current);
+    fs.copyFileSync(copy, current);
     fs.rmSync(copy);
   }
 });

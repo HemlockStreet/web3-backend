@@ -2,15 +2,9 @@ const { ethers } = require('ethers');
 const LocalData = require('../data/LocalData');
 
 module.exports = class Network extends LocalData {
-  update(log = false) {
-    super.egress();
-    if (this.opts.testing.Network && log) console.log({ egressed: this.data });
-  }
-
-  constructor(opts = { testing: {} }) {
+  constructor() {
     super(`${__dirname}/ChainConfig.json`);
-    this.opts = opts;
-    this.update(true);
+    super.egress();
   }
 
   publicInfo() {
