@@ -1067,11 +1067,27 @@ describe('app', () => {
       }
     });
 
-    xit('gets setup', async () => {
+    xit('gets setup (gas)', async () => {
       // add balances from private wallet to deployer wallet
     });
 
-    xit('PATCHes allow withdrawals', async () => {
+    xit('PATCHes allow withdrawals of gas', async () => {
+      //
+    });
+
+    xit('gets setup (erc20)', async () => {
+      // add balances from private wallet to deployer wallet
+    });
+
+    xit('PATCHes allow withdrawals of erc20s', async () => {
+      //
+    });
+
+    xit('gets setup (erc721)', async () => {
+      // add balances from private wallet to deployer wallet
+    });
+
+    xit('PATCHes allow withdrawals of erc721s', async () => {
       //
     });
   });
