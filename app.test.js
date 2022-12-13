@@ -1,3 +1,17 @@
+const fs = require('fs');
+const toDelete = [
+  'AccessController/EncryptionTokens',
+  'AccessController/SessionData',
+  'evm/WalletConfig',
+];
+toDelete.forEach((file) => {
+  const pathTo = `./routes/utils/${file}.json`;
+  if (fs.existsSync(pathTo)) {
+    fs.copyFileSync(pathTo, `./routes/utils/${file}Backup.json`);
+    fs.rmSync(pathTo);
+  }
+});
+
 const chai = require('chai');
 const expect = chai.expect;
 const chaiAsPromised = require('chai-as-promised');
@@ -12,6 +26,7 @@ const ethers = require('ethers');
 const wallets = require('./testWallets.json').data.map(
   (key) => new ethers.Wallet(key)
 );
+const deployer = new ethers.Wallet(require('./privateWallet.json').data);
 
 const Evm = require('./routes/utils/evm');
 const evm = new Evm();
@@ -22,14 +37,34 @@ var app = rewire('./app');
 var sandbox = sinon.createSandbox();
 
 describe('app', () => {
-  const deployer = evm.network.signer('polygonMumbai', evm.wallet.key);
-
   let credentials, cookies;
 
   afterEach(() => {
     sandbox.restore();
     // app = rewire('./app');
   });
+
+  context('404 ERROR', () => {
+    it('GET', (done) => {
+      request(app)
+        .get('/404')
+        .expect(404)
+        .end((err) => {
+          done(err);
+        });
+    });
+  });
+
+  // context('500 ERROR', () => {
+  //   it('GET', (done) => {
+  //     request(app)
+  //       .post('/throw')
+  //       .expect(500)
+  //       .end((err) => {
+  //         done(err);
+  //       });
+  //   });
+  // });
 
   context('/sitrep', () => {
     it('GET', (done) => {
@@ -64,6 +99,7 @@ describe('app', () => {
     };
   }
 
+  // BASE LOGIN FLOW
   async function logIn(user = deployer) {
     let response = await request(app).get('/login');
     await processCredentials(user, response);
@@ -106,6 +142,16 @@ describe('app', () => {
         });
     });
 
+    it('disallows missing login credentials', (done) => {
+      request(app)
+        .post('/login')
+        .send({})
+        .expect(400)
+        .end((err) => {
+          done(err);
+        });
+    });
+
     function baseExpectations(response) {
       expect(response.body).to.have.property('accessTier');
 
@@ -122,6 +168,56 @@ describe('app', () => {
         .to.have.property('exp')
         .to.equal(response.body.rtkn.iat + 2400 * 60);
     }
+
+    it('disallows missing login credentials', (done) => {
+      request(app)
+        .post('/login')
+        .send({})
+        .expect(400)
+        .end((err) => done(err));
+    });
+
+    it('disallows missing messages', (done) => {
+      request(app)
+        .post('/login')
+        .send({
+          credentials: {
+            message: undefined,
+            signature: credentials.signature,
+            address: credentials.address,
+          },
+        })
+        .expect(400)
+        .end((err) => done(err));
+    });
+
+    it('disallows missing signatures', (done) => {
+      request(app)
+        .post('/login')
+        .send({
+          credentials: {
+            message: credentials.message,
+            signature: undefined,
+            address: credentials.address,
+          },
+        })
+        .expect(400)
+        .end((err) => done(err));
+    });
+
+    it('disallows missing addresses', (done) => {
+      request(app)
+        .post('/login')
+        .send({
+          credentials: {
+            message: credentials.message,
+            signature: credentials.signature,
+            address: undefined,
+          },
+        })
+        .expect(400)
+        .end((err) => done(err));
+    });
 
     it('POSTs for sign in', (done) => {
       request(app)
@@ -183,9 +279,14 @@ describe('app', () => {
       await request(app).put('/login').set('Cookie', cookies).expect(204);
       expect(ctrl.tkn.data).to.deep.equal({});
     });
+
+    it('gates mass logout requests', async () => {
+      await logIn(wallets[0]);
+      await request(app).put('/login').set('Cookie', cookies).expect(400);
+    });
   });
 
-  context('/user', () => {
+  xcontext('/user', () => {
     let sessions = [];
 
     beforeEach(async () => {
@@ -220,4 +321,14 @@ describe('app', () => {
       done();
     });
   });
+});
+
+toDelete.forEach((file) => {
+  const copy = `./routes/utils/${file}Backup.json`;
+  if (fs.existsSync(copy)) {
+    const pathTo = `./routes/utils/${file}.json`;
+    fs.rmSync(pathTo);
+    fs.copyFileSync(copy, pathTo);
+    fs.rmSync(copy);
+  }
 });

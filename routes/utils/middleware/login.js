@@ -10,13 +10,13 @@ module.exports = class LoginMiddleware {
    * @dev login step 1 (GET /login)
    * Makes sure the client is sending an address for getting the challenge token.
    */
-  evmAddr(req, res, next) {
-    const address = req.body.credentials?.address;
-    if (!address) return rejection('credentials?.address', 'missing', res);
-    if (!ethers.utils.isAddress(address))
-      return rejection('credentials.address', 'invalid', res);
-    next();
-  }
+  // evmAddr(req, res, next) {
+  //   const address = req.body.credentials?.address;
+  //   if (!address) return rejection('credentials?.address', 'missing', res);
+  //   if (!ethers.utils.isAddress(address))
+  //     return rejection('credentials.address', 'invalid', res);
+  //   next();
+  // }
 
   /**
    * @dev login step 2 (POST /login)

@@ -18,6 +18,13 @@ const app = express()
 
 route(app);
 
+// if ((process.env.NODE_ENV = 'development')) {
+//   app.post('/throw', (req, res) => {
+//     const { body } = req.body;
+//     res.status(200).json({ body });
+//   });
+// }
+
 app.listen(port, () => console.log(`\nListening On port:${port}\n`));
 
 app.use((req, res, next) => {

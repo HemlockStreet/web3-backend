@@ -1,11 +1,13 @@
 package-lock.json
 
 **/WalletConfig.json
+**/WalletConfigBackup.json
 **/Tokens.json
 **/Sessions.json
 **/EncryptionTokens.json
 **/SessionData.json
 testWallets.json
+privateWallet.json
 
 .nyc_output
 logs
