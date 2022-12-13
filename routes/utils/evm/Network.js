@@ -169,6 +169,8 @@ module.exports = class Network extends LocalData {
   async register(alias, values) {
     const input = await this.inspect(values);
     if (typeof input === 'string') return input;
+    // delete input.alias;
+    // console.log(alias);
     this.data[alias] = input;
     super.ingress(this.data);
     return 'pass';

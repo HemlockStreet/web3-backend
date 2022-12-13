@@ -92,14 +92,16 @@ class Evm {
 
         info = `withdrew gas`;
       } else if (['ERC20', 'ERC721', 'ERC1155'].includes(type)) {
-        const { contractAddress } = req.body.args;
+        const { contractAddress } = req.body.args.asset;
         const { abi } = require(`./interfaces/${type}.json`);
         const token = new ethers.Contract(contractAddress, abi, signer);
         const from = this.wallet.address;
 
         if (type === 'ERC20') {
           const decimals = await token.decimals();
-          const amount = (parseFloat(value) * 10 ** decimals).toString();
+          const amount = parseInt(
+            parseFloat(value) * 10 ** decimals
+          ).toString();
           tx = await token.transferFrom(from, to, amount);
 
           info = `withdrew ERC20`;
@@ -109,7 +111,7 @@ class Evm {
 
           info = `withdrew ERC721`;
         } else if (type === 'ERC1155') {
-          const { bytes: data, valueId: rawId } = req.body.args;
+          const { bytes: data, valueId: rawId } = req.body.args.asset;
           const id = parseInt(rawId); // type of token
           const amount = parseInt(value); // amount of token
           tx = token.safeTransferFrom(from, to, id, amount, data);

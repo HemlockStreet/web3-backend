@@ -1,38 +1,12 @@
-const fs = require('fs');
-const toDelete = [
-  'AccessController/EncryptionTokens',
-  'AccessController/SessionData',
-  'evm/WalletConfig',
-  'evm/ChainConfig',
-];
 const ethers = require('ethers');
-function createWallet() {
-  const newWallet = ethers.Wallet.createRandom();
-  return newWallet._signingKey();
-}
-if (!fs.existsSync('./privateWallet.json'))
-  fs.writeFileSync(
-    './privateWallet.json',
-    JSON.stringify(createWallet(), undefined, 2)
-  );
-if (!fs.existsSync('./testWallets.json')) {
-  let data = [
-    createWallet(),
-    createWallet(),
-    createWallet(),
-    createWallet(),
-    createWallet(),
-  ];
-  fs.writeFileSync(
-    './testWallets.json',
-    JSON.stringify({ data }, undefined, 2)
-  );
-}
-const deployer = new ethers.Wallet(require('./privateWallet.json').privateKey);
-const wallets = require('./testWallets.json').data.map(
-  (walletData) => new ethers.Wallet(walletData.privateKey)
-);
-const walletAddresses = wallets.map((wallet) => wallet.address);
+const handle = require('./testing/handlers');
+const { ctrl, evm, deployer, wallets, walletAddresses } = handle.mocks;
+
+const [newRoot, newAdmin, newManager, newEmployee, newUser] = wallets;
+const reference = evm.network.data;
+const network = 'polygonMumbai';
+const { polygonMumbai } = reference;
+const networkDetails = polygonMumbai;
 
 const chai = require('chai');
 const expect = chai.expect;
@@ -44,158 +18,138 @@ chai.use(sinonChai);
 const rewire = require('rewire');
 const request = require('supertest');
 
-const Evm = require('./routes/utils/evm');
-const evm = new Evm();
-const AccessController = require('./routes/utils/AccessController');
-const ctrl = new AccessController();
-
 var app = rewire('./app');
 var sandbox = sinon.createSandbox();
 
-describe('app', () => {
-  let credentials, cookies;
+let response, credentials, cookies;
+let sessions = [];
 
+// @loginFlow
+async function processCredentials(user = deployer, response) {
+  const signature = await user.signMessage(response.body.challenge);
+  credentials = {
+    address: user.address,
+    message: response.body.challenge,
+    signature,
+  };
+}
+
+async function logIn(user = deployer) {
+  response = await request(app).get('/login');
+  await processCredentials(user, response);
+  response = await request(app).post('/login').send({ credentials });
+  cookies = response.headers['set-cookie'];
+}
+
+async function logOut(tokens = cookies) {
+  await request(app).delete('/login').set('Cookie', tokens);
+}
+
+async function massLogin() {
+  for await (const user of wallets) {
+    await logIn(user);
+    sessions.push(cookies);
+  }
+  await logIn();
+}
+
+async function massLogout() {
+  for await (const user of wallets) {
+    await logOut(user);
+    sessions.push(cookies);
+  }
+  sessions = [];
+}
+
+const expectStatus = (res, num) => {
+  if (res.status !== num && res.body) console.error(res.body);
+  expect(res.status).to.equal(num);
+};
+
+describe('app', () => {
   afterEach(() => {
     sandbox.restore();
     // app = rewire('./app');
   });
 
   context('404 ERROR', () => {
-    it('GET', (done) => {
-      request(app)
-        .get('/404')
-        .expect(404)
-        .end((err) => {
-          done(err);
-        });
+    it('GET', async () => {
+      response = request(app).get('/404').expect(404);
     });
   });
 
   context('500 ERROR', () => {
-    it('GET', (done) => {
-      request(app)
-        .post('/throw')
-        .expect(500)
-        .end((err) => {
-          done(err);
-        });
+    it('GET', async () => {
+      response = await request(app).post('/throw').expect(500);
     });
   });
 
   context('/sitrep', () => {
-    it('GET', (done) => {
-      request(app)
-        .get('/sitrep')
-        .expect(200)
-        .end((err, response) => {
-          if (err) {
-            console.log(err);
-            return done(err);
-          }
+    it('GET', async () => {
+      response = await request(app).get('/sitrep');
+      expectStatus(response, 200);
 
-          expect(response.body)
-            .to.have.property('deployer')
-            .to.equal(evm.wallet.address);
+      expect(response.body)
+        .to.have.property('deployer')
+        .to.equal(evm.wallet.address);
 
-          expect(response.body)
-            .to.have.property('networks')
-            .to.deep.equal(evm.network.publicInfo());
-
-          done();
-        });
+      expect(response.body)
+        .to.have.property('networks')
+        .to.deep.equal(evm.network.publicInfo());
     });
   });
 
-  async function processCredentials(user = deployer, response) {
-    const signature = await user.signMessage(response.body.challenge);
-    credentials = {
-      address: user.address,
-      message: response.body.challenge,
-      signature,
-    };
-  }
-
-  // BASE LOGIN FLOW
-  async function logIn(user = deployer) {
-    let response = await request(app).get('/login');
-    await processCredentials(user, response);
-    response = await request(app).post('/login').send({ credentials });
-    cookies = response.headers['set-cookie'];
-  }
-
-  async function logOut(tokens = cookies) {
-    await request(app).delete('/login').set('Cookie', tokens);
-  }
-
   context('/login', () => {
-    it('GETs login challenge', (done) => {
-      request(app)
-        .get('/login')
-        .expect(200)
-        .end((err, response) => {
-          if (err) {
-            console.log(err);
-            return done(err);
-          }
+    it('GETs login challenge', async () => {
+      response = await request(app).get('/login');
+      expectStatus(response, 200);
+      expect(response.body).to.have.property('challenge');
+      const ctkn = response.body.challenge;
+      const decoded = ctrl.tkn.utils.verify('atkn', ctkn);
+      expect(decoded).to.exist;
+      expect(decoded.ip).to.equal('::ffff:127.0.0.1');
+      expect(decoded.iat + 5 * 60).to.equal(decoded.exp);
 
-          expect(response.body).to.have.property('challenge');
-          const ctkn = response.body.challenge;
-
-          const decoded = ctrl.tkn.utils.verify('atkn', ctkn);
-          expect(decoded).to.exist;
-          expect(decoded.ip).to.equal('::ffff:127.0.0.1');
-          expect(decoded.iat + 5 * 60).to.equal(decoded.exp);
-
-          deployer.signMessage(ctkn).then((signature) => {
-            credentials = {
-              address: deployer.address,
-              message: ctkn,
-              signature,
-            };
-
-            done();
-          });
-        });
+      const signature = await deployer.signMessage(ctkn);
+      credentials = {
+        address: deployer.address,
+        message: ctkn,
+        signature,
+      };
     });
 
-    it('disallows missing login credentials', (done) => {
-      request(app)
-        .post('/login')
-        .send({})
-        .expect(400)
-        .end((err) => {
-          done(err);
-        });
+    it('disallows missing login credentials', async () => {
+      response = await request(app).post('/login').send({});
+      expectStatus(response, 400);
     });
 
-    function baseExpectations(response) {
-      expect(response.body).to.have.property('scope');
-      expect(response.body).to.have.property('roles').to.deep.equal([]);
+    function expectProperDates(res) {
+      const body = res.body;
+      expect(body).to.have.property('scope');
+      expect(body).to.have.property('roles').to.deep.equal([]);
 
-      expect(response.body).to.have.property('atkn');
-      expect(response.body).to.have.property('rtkn');
+      expect(body).to.have.property('atkn');
+      expect(body).to.have.property('rtkn');
 
-      expect(response.body.atkn).to.have.property('iat');
-      expect(response.body.rtkn).to.have.property('iat');
+      const { atkn, rtkn } = body;
+      expect(atkn).to.have.property('iat');
+      expect(rtkn).to.have.property('iat');
 
-      expect(response.body.atkn)
+      expect(atkn)
         .to.have.property('exp')
-        .to.equal(response.body.atkn.iat + 90 * 60);
-      expect(response.body.rtkn)
+        .to.equal(atkn.iat + 90 * 60);
+      expect(rtkn)
         .to.have.property('exp')
-        .to.equal(response.body.rtkn.iat + 2400 * 60);
+        .to.equal(rtkn.iat + 2400 * 60);
     }
 
-    it('disallows missing login credentials', (done) => {
-      request(app)
-        .post('/login')
-        .send({})
-        .expect(400)
-        .end((err) => done(err));
+    it('disallows missing login credentials', async () => {
+      response = await request(app).post('/login').send({});
+      expectStatus(response, 400);
     });
 
-    it('disallows missing messages', (done) => {
-      request(app)
+    it('disallows missing messages', async () => {
+      response = await request(app)
         .post('/login')
         .send({
           credentials: {
@@ -203,13 +157,12 @@ describe('app', () => {
             signature: credentials.signature,
             address: credentials.address,
           },
-        })
-        .expect(400)
-        .end((err) => done(err));
+        });
+      expectStatus(response, 400);
     });
 
-    it('disallows missing signatures', (done) => {
-      request(app)
+    it('disallows missing signatures', async () => {
+      response = await request(app)
         .post('/login')
         .send({
           credentials: {
@@ -217,13 +170,12 @@ describe('app', () => {
             signature: undefined,
             address: credentials.address,
           },
-        })
-        .expect(400)
-        .end((err) => done(err));
+        });
+      expectStatus(response, 400);
     });
 
-    it('disallows missing addresses', (done) => {
-      request(app)
+    it('disallows missing addresses', async () => {
+      response = await request(app)
         .post('/login')
         .send({
           credentials: {
@@ -231,9 +183,8 @@ describe('app', () => {
             signature: credentials.signature,
             address: undefined,
           },
-        })
-        .expect(400)
-        .end((err) => done(err));
+        });
+      expectStatus(response, 400);
     });
 
     it('POSTs for sign in', (done) => {
@@ -247,7 +198,7 @@ describe('app', () => {
             return done(err);
           }
           cookies = response.headers['set-cookie'];
-          baseExpectations(response);
+          expectProperDates(response);
           expect(response.body.scope).to.equal('root');
           done();
         });
@@ -267,7 +218,7 @@ describe('app', () => {
           expect(cookies[0]).to.not.equal(newCookies[0]);
           expect(cookies[1]).to.not.equal(newCookies[1]);
           cookies = newCookies;
-          baseExpectations(response);
+          expectProperDates(response);
           expect(response.body.scope).to.equal('root');
           done();
         });
@@ -287,7 +238,7 @@ describe('app', () => {
         .patch('/login')
         .set('Cookie', cookies)
         .send({ credentials });
-      baseExpectations(response);
+      expectProperDates(response);
       expect(response.body.scope).to.equal('user');
     });
 
@@ -304,77 +255,79 @@ describe('app', () => {
   });
 
   context('/user', async () => {
-    let sessions = [];
+    beforeEach(async () => await massLogin());
+    afterEach(async () => await massLogout());
 
-    beforeEach(async () => {
-      for await (const user of wallets) {
-        await logIn(user);
-        sessions.push(cookies);
-      }
-      await logIn();
-    });
-
-    afterEach(async () => {
-      for await (const user of wallets) {
-        await logOut(user);
-        sessions.push(cookies);
-      }
-      sessions = [];
-    });
-
-    function baseExpectations(user, response) {
-      expect(response.body).to.haveOwnProperty('me');
-      expect(response.body.me).to.haveOwnProperty('timestamp');
-      expect(response.body.me)
-        .to.haveOwnProperty('address')
-        .to.equal(user.address);
-      expect(response.body.me)
-        .to.haveOwnProperty('ip')
-        .to.equal('::ffff:127.0.0.1');
-      expect(response.body.me).to.haveOwnProperty('scope');
-      expect(response.body.me).to.haveOwnProperty('roles');
+    function expectUserData(user, res) {
+      expect(res.body).to.haveOwnProperty('me');
+      const me = res.body.me;
+      expect(me).to.haveOwnProperty('timestamp');
+      expect(me).to.haveOwnProperty('address').to.equal(user.address);
+      expect(me).to.haveOwnProperty('ip').to.equal('::ffff:127.0.0.1');
+      expect(me).to.haveOwnProperty('scope');
+      expect(me).to.haveOwnProperty('roles');
     }
 
-    it('GETs "me"', async () => {
-      let response = await request(app).get('/user').set('Cookie', cookies);
-      const base = walletAddresses.map((addr) => {
-        return { [addr]: [] };
-      });
-      expect(response.body)
-        .to.haveOwnProperty('root')
-        .to.deep.equal([{ [deployer.address]: [] }]);
-      expect(response.body).to.haveOwnProperty('admins').to.deep.equal([]);
-      expect(response.body).to.haveOwnProperty('managers').to.deep.equal([]);
-      expect(response.body).to.haveOwnProperty('employees').to.deep.equal([]);
-      expect(response.body).to.haveOwnProperty('clientele').to.deep.equal(base);
-      baseExpectations(deployer, response);
+    function expectScopeMembers(res, scope, entries = []) {
+      let expectedEntries = [];
+      entries.forEach((entry) => expectedEntries.push({ [entry.address]: [] }));
+      expect(res.body).to.haveOwnProperty(scope).to.deep.equal(expectedEntries);
+    }
 
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(7);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('root');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+    function expectNoScope(res, scope) {
+      expect(res.body).to.not.haveOwnProperty(scope);
+    }
 
-      for await (user of wallets) {
+    function expectMe(res, scope) {
+      const num =
+        scope === 'root'
+          ? 7
+          : scope === 'admin'
+          ? 5
+          : scope === 'manager'
+          ? 3
+          : scope === 'employee'
+          ? 2
+          : 1;
+      expect(response.body.me).to.haveOwnProperty('scope').to.equal(scope);
+      expect(res.body.me).to.haveOwnProperty('tier').to.equal(num);
+    }
+
+    function expectNoRoles(res) {
+      expect(res.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+    }
+
+    it('GETs "me" (root)', async () => {
+      response = await request(app).get('/user').set('Cookie', cookies);
+      expectScopeMembers(response, 'root', [deployer]);
+      expectScopeMembers(response, 'admins');
+      expectScopeMembers(response, 'managers');
+      expectScopeMembers(response, 'employees');
+      expectScopeMembers(response, 'clientele', wallets);
+      expectUserData(deployer, response);
+      expectMe(response, 'root');
+      expectNoRoles(response);
+    });
+
+    it('GETs "me" (user)', async () => {
+      for await (const user of wallets) {
         response = await request(app)
           .get('/user')
-          .set('Cookie', sessions[wallets.indexOf(user)])
-          .expect(200);
-
-        expect(response.body).to.not.haveOwnProperty('root');
-        expect(response.body).to.not.haveOwnProperty('admins');
-        expect(response.body).to.not.haveOwnProperty('managers');
-        expect(response.body).to.not.haveOwnProperty('employees');
-        expect(response.body).to.not.haveOwnProperty('clientele');
-        baseExpectations(user, response);
-
-        expect(response.body.me).to.haveOwnProperty('tier').to.equal(1);
-        expect(response.body.me).to.haveOwnProperty('scope').to.equal('user');
-        expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+          .set('Cookie', sessions[wallets.indexOf(user)]);
+        expectStatus(response, 200);
+        expectNoScope(response, 'root');
+        expectNoScope(response, 'admins');
+        expectNoScope(response, 'managers');
+        expectNoScope(response, 'employees');
+        expectNoScope(response, 'clientele');
+        expectUserData(user, response);
+        expectMe(response, 'user');
+        expectNoRoles(response);
       }
     });
 
     it('PUTs allow scope editing', async () => {
-      let response;
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
+      const [newRoot, newAdmin, newManager, newEmployee, newUser] = wallets;
       response = await request(app)
         .put('/user')
         .set('Cookie', cookies)
@@ -398,8 +351,8 @@ describe('app', () => {
               groupId: 'root',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .put('/user')
@@ -411,8 +364,8 @@ describe('app', () => {
               groupId: 'admin',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .put('/user')
@@ -424,8 +377,8 @@ describe('app', () => {
               groupId: 'manager',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .put('/user')
@@ -437,8 +390,8 @@ describe('app', () => {
               groupId: 'employee',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       await request(app)
         .put('/user')
@@ -446,7 +399,7 @@ describe('app', () => {
         .send({
           args: {
             userConfig: {
-              address: user.address,
+              address: newUser.address,
               groupId: 'user',
             },
           },
@@ -455,7 +408,7 @@ describe('app', () => {
 
       await request(app)
         .put('/user')
-        .set('Cookie', sessions[wallets.indexOf(user)])
+        .set('Cookie', sessions[wallets.indexOf(newUser)])
         .send({
           args: {
             userConfig: {
@@ -502,8 +455,8 @@ describe('app', () => {
               groupId: 'user',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .put('/user')
@@ -515,103 +468,67 @@ describe('app', () => {
               groupId: 'employee',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
     });
 
     it('updates new gets', async () => {
-      let response;
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
       for await (const signerOf of [deployer, newRoot]) {
         response = await request(app)
           .get('/user')
           .set('Cookie', signerOf === deployer ? cookies : sessions[0]);
-        expect(response.body)
-          .to.haveOwnProperty('root')
-          .to.deep.equal([
-            { [deployer.address]: [] },
-            { [newRoot.address]: [] },
-          ]);
-        expect(response.body)
-          .to.haveOwnProperty('admins')
-          .to.deep.equal([{ [newAdmin.address]: [] }]);
-        expect(response.body)
-          .to.haveOwnProperty('managers')
-          .to.deep.equal([{ [newManager.address]: [] }]);
-        expect(response.body)
-          .to.haveOwnProperty('employees')
-          .to.deep.equal([{ [newEmployee.address]: [] }]);
-        expect(response.body)
-          .to.haveOwnProperty('clientele')
-          .to.deep.equal([{ [user.address]: [] }]);
-        baseExpectations(signerOf, response);
-        expect(response.body.me).to.haveOwnProperty('tier').to.equal(7);
-        expect(response.body.me).to.haveOwnProperty('scope').to.equal('root');
-        expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+        expectScopeMembers(response, 'root', [deployer, newRoot]);
+        expectScopeMembers(response, 'admins', [newAdmin]);
+        expectScopeMembers(response, 'managers', [newManager]);
+        expectScopeMembers(response, 'employees', [newEmployee]);
+        expectScopeMembers(response, 'clientele', [newUser]);
+        expectUserData(signerOf, response);
+        expectMe(response, 'root');
+        expectNoRoles(response);
       }
 
       response = await request(app).get('/user').set('Cookie', sessions[1]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body)
-        .to.haveOwnProperty('admins')
-        .to.deep.equal([{ [newAdmin.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('managers')
-        .to.deep.equal([{ [newManager.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('employees')
-        .to.deep.equal([{ [newEmployee.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('clientele')
-        .to.deep.equal([{ [user.address]: [] }]);
-      baseExpectations(newAdmin, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(5);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('admin');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectScopeMembers(response, 'admins', [newAdmin]);
+      expectScopeMembers(response, 'managers', [newManager]);
+      expectScopeMembers(response, 'employees', [newEmployee]);
+      expectScopeMembers(response, 'clientele', [newUser]);
+      expectUserData(newAdmin, response);
+      expectMe(response, 'admin');
+      expectNoRoles(response);
 
       response = await request(app).get('/user').set('Cookie', sessions[2]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body)
-        .to.haveOwnProperty('managers')
-        .to.deep.equal([{ [newManager.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('employees')
-        .to.deep.equal([{ [newEmployee.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('clientele')
-        .to.deep.equal([{ [user.address]: [] }]);
-      baseExpectations(newManager, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(3);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('manager');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectScopeMembers(response, 'managers', [newManager]);
+      expectScopeMembers(response, 'employees', [newEmployee]);
+      expectScopeMembers(response, 'clientele', [newUser]);
+      expectUserData(newManager, response);
+      expectMe(response, 'manager');
+      expectNoRoles(response);
 
       response = await request(app).get('/user').set('Cookie', sessions[3]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body).to.not.haveOwnProperty('managers');
-      expect(response.body).to.not.haveOwnProperty('employees');
-      expect(response.body).to.not.haveOwnProperty('clientele');
-      baseExpectations(newEmployee, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(2);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('employee');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectNoScope(response, 'managers');
+      expectNoScope(response, 'employees');
+      expectNoScope(response, 'clientele');
+      expectUserData(newEmployee, response);
+      expectMe(response, 'employee');
+      expectNoRoles(response);
 
       response = await request(app).get('/user').set('Cookie', sessions[4]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body).to.not.haveOwnProperty('managers');
-      expect(response.body).to.not.haveOwnProperty('employees');
-      expect(response.body).to.not.haveOwnProperty('clientele');
-      baseExpectations(user, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(1);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('user');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectNoScope(response, 'managers');
+      expectNoScope(response, 'employees');
+      expectNoScope(response, 'clientele');
+      expectUserData(newUser, response);
+      expectMe(response, 'user');
+      expectNoRoles(response);
     });
 
     it('PATCHes edit roles', async () => {
-      let response;
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
       response = await request(app)
         .patch('/user')
         .set('Cookie', cookies)
@@ -623,8 +540,8 @@ describe('app', () => {
               add: true,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .patch('/user')
@@ -637,8 +554,8 @@ describe('app', () => {
               add: false,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .patch('/user')
@@ -651,8 +568,8 @@ describe('app', () => {
               add: true,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       response = await request(app)
         .patch('/user')
@@ -665,108 +582,81 @@ describe('app', () => {
               add: true,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
     });
 
     it('updates new gets', async () => {
-      let response;
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
       for await (const signerOf of [deployer, newRoot]) {
         response = await request(app)
           .get('/user')
           .set('Cookie', signerOf === deployer ? cookies : sessions[0]);
-        expect(response.body)
-          .to.haveOwnProperty('root')
-          .to.deep.equal([
-            { [deployer.address]: [] },
-            { [newRoot.address]: [] },
-          ]);
+        expectScopeMembers(response, 'root', [deployer, newRoot]);
         expect(response.body)
           .to.haveOwnProperty('admins')
           .to.deep.equal([{ [newAdmin.address]: ['finance'] }]);
         expect(response.body)
           .to.haveOwnProperty('managers')
           .to.deep.equal([{ [newManager.address]: ['network'] }]);
-        expect(response.body)
-          .to.haveOwnProperty('employees')
-          .to.deep.equal([{ [newEmployee.address]: [] }]);
-        expect(response.body)
-          .to.haveOwnProperty('clientele')
-          .to.deep.equal([{ [user.address]: [] }]);
-        baseExpectations(signerOf, response);
-        expect(response.body.me).to.haveOwnProperty('tier').to.equal(7);
-        expect(response.body.me).to.haveOwnProperty('scope').to.equal('root');
-        expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+        expectScopeMembers(response, 'employees', [newEmployee]);
+        expectScopeMembers(response, 'clientele', [newUser]);
+        expectUserData(signerOf, response);
+        expectMe(response, 'root');
+        expectNoRoles(response);
       }
 
       response = await request(app).get('/user').set('Cookie', sessions[1]);
-      expect(response.body).to.not.haveOwnProperty('root');
+      expectNoScope(response, 'root');
       expect(response.body)
         .to.haveOwnProperty('admins')
         .to.deep.equal([{ [newAdmin.address]: ['finance'] }]);
       expect(response.body)
         .to.haveOwnProperty('managers')
         .to.deep.equal([{ [newManager.address]: ['network'] }]);
-      expect(response.body)
-        .to.haveOwnProperty('employees')
-        .to.deep.equal([{ [newEmployee.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('clientele')
-        .to.deep.equal([{ [user.address]: [] }]);
-      baseExpectations(newAdmin, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(5);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('admin');
+      expectScopeMembers(response, 'employees', [newEmployee]);
+      expectScopeMembers(response, 'clientele', [newUser]);
+      expectUserData(newAdmin, response);
+      expectMe(response, 'admin');
       expect(response.body.me)
         .to.haveOwnProperty('roles')
         .to.deep.equal(['finance']);
 
       response = await request(app).get('/user').set('Cookie', sessions[2]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
       expect(response.body)
         .to.haveOwnProperty('managers')
         .to.deep.equal([{ [newManager.address]: ['network'] }]);
-      expect(response.body)
-        .to.haveOwnProperty('employees')
-        .to.deep.equal([{ [newEmployee.address]: [] }]);
-      expect(response.body)
-        .to.haveOwnProperty('clientele')
-        .to.deep.equal([{ [user.address]: [] }]);
-      baseExpectations(newManager, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(3);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('manager');
+      expectScopeMembers(response, 'employees', [newEmployee]);
+      expectScopeMembers(response, 'clientele', [newUser]);
+      expectUserData(newManager, response);
+      expectMe(response, 'manager');
       expect(response.body.me)
         .to.haveOwnProperty('roles')
         .to.deep.equal(['network']);
 
       response = await request(app).get('/user').set('Cookie', sessions[3]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body).to.not.haveOwnProperty('managers');
-      expect(response.body).to.not.haveOwnProperty('employees');
-      expect(response.body).to.not.haveOwnProperty('clientele');
-      baseExpectations(newEmployee, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(2);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('employee');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectNoScope(response, 'managers');
+      expectNoScope(response, 'employees');
+      expectNoScope(response, 'clientele');
+      expectUserData(newEmployee, response);
+      expectMe(response, 'employee');
+      expectNoRoles(response);
 
       response = await request(app).get('/user').set('Cookie', sessions[4]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body).to.not.haveOwnProperty('managers');
-      expect(response.body).to.not.haveOwnProperty('employees');
-      expect(response.body).to.not.haveOwnProperty('clientele');
-      baseExpectations(user, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(1);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('user');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectNoScope(response, 'managers');
+      expectNoScope(response, 'employees');
+      expectNoScope(response, 'clientele');
+      expectUserData(newUser, response);
+      expectMe(response, 'user');
+      expectNoRoles(response);
     });
 
     it('DELETEs remove users entirely', async () => {
-      let response;
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
-
       response = await request(app)
         .delete('/user')
         .set('Cookie', cookies)
@@ -788,8 +678,8 @@ describe('app', () => {
               address: newAdmin.address,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
       expect(ctrl.tkn.roles.data[newAdmin.address]).to.not.exist;
 
       response = await request(app)
@@ -801,8 +691,8 @@ describe('app', () => {
               address: newManager.address,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
       expect(ctrl.tkn.roles.data[newManager.address]).to.not.exist;
 
       response = await request(app)
@@ -811,7 +701,7 @@ describe('app', () => {
         .send({
           args: {
             userConfig: {
-              address: user.address,
+              address: newUser.address,
             },
           },
         })
@@ -819,65 +709,51 @@ describe('app', () => {
     });
 
     it('updates new gets', async () => {
-      let response;
       const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
       for await (const signerOf of [deployer, newRoot]) {
         response = await request(app)
           .get('/user')
           .set('Cookie', signerOf === deployer ? cookies : sessions[0]);
-        expect(response.body)
-          .to.haveOwnProperty('root')
-          .to.deep.equal([
-            { [deployer.address]: [] },
-            { [newRoot.address]: [] },
-          ]);
-        expect(response.body).to.haveOwnProperty('admins').to.deep.equal([]);
-        expect(response.body).to.haveOwnProperty('managers').to.deep.equal([]);
-        expect(response.body)
-          .to.haveOwnProperty('employees')
-          .to.deep.equal([{ [newEmployee.address]: [] }]);
-        expect(response.body)
-          .to.haveOwnProperty('clientele')
-          .to.deep.equal([
-            { [user.address]: [] },
-            { [newAdmin.address]: [] },
-            { [newManager.address]: [] },
-          ]);
-        baseExpectations(signerOf, response);
-        expect(response.body.me).to.haveOwnProperty('tier').to.equal(7);
-        expect(response.body.me).to.haveOwnProperty('scope').to.equal('root');
-        expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+        expectScopeMembers(response, 'root', [deployer, newRoot]);
+        expectScopeMembers(response, 'admins');
+        expectScopeMembers(response, 'managers');
+        expectScopeMembers(response, 'employees', [newEmployee]);
+        expectScopeMembers(response, 'clientele', [
+          newUser,
+          newAdmin,
+          newManager,
+        ]);
+        expectUserData(signerOf, response);
+        expectMe(response, 'root');
+        expectNoRoles(response);
       }
 
       response = await request(app).get('/user').set('Cookie', sessions[3]);
-      expect(response.body).to.not.haveOwnProperty('root');
-      expect(response.body).to.not.haveOwnProperty('admins');
-      expect(response.body).to.not.haveOwnProperty('managers');
-      expect(response.body).to.not.haveOwnProperty('employees');
-      expect(response.body).to.not.haveOwnProperty('clientele');
-      baseExpectations(newEmployee, response);
-      expect(response.body.me).to.haveOwnProperty('tier').to.equal(2);
-      expect(response.body.me).to.haveOwnProperty('scope').to.equal('employee');
-      expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+      expectNoScope(response, 'root');
+      expectNoScope(response, 'admins');
+      expectNoScope(response, 'managers');
+      expectNoScope(response, 'employees');
+      expectNoScope(response, 'clientele');
+      expectUserData(newEmployee, response);
+      expectMe(response, 'employee');
+      expectNoRoles(response);
 
       for await (const signerOf of [user, newAdmin, newManager]) {
         response = await request(app)
           .get('/user')
           .set('Cookie', sessions[wallets.indexOf(signerOf)]);
-        expect(response.body).to.not.haveOwnProperty('root');
-        expect(response.body).to.not.haveOwnProperty('admins');
-        expect(response.body).to.not.haveOwnProperty('managers');
-        expect(response.body).to.not.haveOwnProperty('employees');
-        expect(response.body).to.not.haveOwnProperty('clientele');
-        baseExpectations(signerOf, response);
-        expect(response.body.me).to.haveOwnProperty('tier').to.equal(1);
-        expect(response.body.me).to.haveOwnProperty('scope').to.equal('user');
-        expect(response.body.me).to.haveOwnProperty('roles').to.deep.equal([]);
+        expectNoScope(response, 'root');
+        expectNoScope(response, 'admins');
+        expectNoScope(response, 'managers');
+        expectNoScope(response, 'employees');
+        expectNoScope(response, 'clientele');
+        expectUserData(signerOf, response);
+        expectMe(response, 'user');
+        expectNoRoles(response);
       }
     });
 
     it('resets', async () => {
-      const [newRoot, newAdmin, newManager, newEmployee, user] = wallets;
       await request(app)
         .put('/user')
         .set('Cookie', cookies)
@@ -888,8 +764,8 @@ describe('app', () => {
               groupId: 'admin',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       await request(app)
         .patch('/user')
@@ -902,8 +778,8 @@ describe('app', () => {
               add: true,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       await request(app)
         .put('/user')
@@ -915,8 +791,8 @@ describe('app', () => {
               groupId: 'manager',
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
 
       await request(app)
         .patch('/user')
@@ -929,179 +805,195 @@ describe('app', () => {
               add: true,
             },
           },
-        })
-        .expect(200);
+        });
+      expectStatus(response, 200);
     });
   });
 
   context('/network', async () => {
-    let sessions = [];
-
+    let rootSesh, adminSesh, managerSesh, empSesh, userSesh, edited;
     beforeEach(async () => {
-      for await (const user of wallets) {
-        await logIn(user);
-        sessions.push(cookies);
-      }
-      await logIn();
+      await massLogin();
+      [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
+      edited = reference;
     });
-
-    afterEach(async () => {
-      for await (const user of wallets) {
-        await logOut(user);
-        sessions.push(cookies);
-      }
-      sessions = [];
-    });
+    afterEach(async () => await massLogout());
 
     it('GETs network details', async () => {
-      const [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
       for await (const sesh of [userSesh, adminSesh, empSesh]) {
         await request(app).get('/network').set('Cookie', sesh).expect(400);
       }
-      let response;
+      delete edited.polygonMumbai.alias;
       for await (const sesh of [cookies, rootSesh, managerSesh]) {
-        response = await request(app)
-          .get('/network')
-          .set('Cookie', sesh)
-          .expect(200);
-        expect(response.body).to.deep.equal(evm.network.data);
+        response = await request(app).get('/network').set('Cookie', sesh);
+        expectStatus(response, 200);
+        expect(response.body).to.deep.equal(edited);
       }
     });
 
-    const backup = evm.network.data;
-    const networkDetails = backup.polygonMumbai;
-    let edited = backup;
     it('DELETEs remove networks', async () => {
-      let response;
       response = await request(app)
         .delete('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'polygoMumbai' })
-        .expect(500);
+        .send({ network });
+      expectStatus(response, 200);
 
       response = await request(app)
         .delete('/network')
         .set('Cookie', sessions[2])
-        .send({ network: 'polygonMumbai' })
-        .expect(200);
+        .send({ network });
+      expectStatus(response, 500);
 
-      response = await request(app)
-        .delete('/network')
-        .set('Cookie', sessions[2])
-        .send({ network: 'polygonMumbai' })
-        .expect(500);
-
-      response = await request(app)
-        .get('/network')
-        .set('Cookie', sessions[2])
-        .expect(200);
+      response = await request(app).get('/network').set('Cookie', sessions[2]);
+      expectStatus(response, 200);
 
       delete edited.polygonMumbai;
       expect(response.body).to.deep.equal(edited);
     });
 
     it('PUTs allow network edits', async () => {
-      let response;
+      response = await request(app)
+        .put('/network')
+        .set('Cookie', sessions[2])
+        .send({ args: { networkDetails } });
+      expectStatus(response, 400);
 
       response = await request(app)
         .put('/network')
         .set('Cookie', sessions[2])
-        .send({ args: { networkDetails } })
-        .expect(400);
+        .send({
+          network,
+          args: { networkDetails },
+        });
+      expectStatus(response, 200);
 
-      response = await request(app)
-        .put('/network')
-        .set('Cookie', sessions[2])
-        .send({ network: 'polygonMumbai', args: { networkDetails } })
-        .expect(200);
+      response = await request(app).get('/network').set('Cookie', sessions[2]);
+      expectStatus(response, 200);
 
-      response = await request(app)
-        .get('/network')
-        .set('Cookie', sessions[2])
-        .expect(200);
-
-      edited.polygonMumbai = networkDetails;
-      edited.polygonMumbai.privateRpc = networkDetails.rpc;
+      edited.polygonMumbai = polygonMumbai;
+      edited.polygonMumbai.privateRpc = polygonMumbai.rpc;
       expect(response.body).to.deep.equal(edited);
     });
   });
 
   context('/balance', async () => {
-    let sessions = [];
-
+    let rootSesh, adminSesh, managerSesh, empSesh, userSesh;
     beforeEach(async () => {
-      for await (user of wallets) {
-        await logIn(user);
-        sessions.push(cookies);
-      }
-      await logIn();
+      await massLogin();
+      [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
     });
-
-    afterEach(async () => {
-      for await (user of wallets) {
-        await logOut(user);
-        sessions.push(cookies);
-      }
-      sessions = [];
-    });
+    afterEach(async () => await massLogout());
 
     it('GETs deployer balance', async () => {
-      let response;
-      const [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
       for await (const sesh of [userSesh, managerSesh, empSesh]) {
         await request(app)
           .get('/balance')
           .set('Cookie', sesh)
-          .send({ network: 'polygonMumbai' })
+          .send({ network })
           .expect(400);
       }
       for await (const sesh of [cookies, rootSesh, adminSesh]) {
         response = await request(app)
           .get('/balance')
           .set('Cookie', sesh)
-          .send({ network: 'polygonMumbai' })
-          .expect(200);
+          .send({ network });
+        expectStatus(response, 200);
         expect(response.body)
           .to.haveOwnProperty('info')
           .to.equal('My balance is 0.0 Mumbai MATIC.');
       }
     });
 
-    xit('gets setup (gas)', async () => {
-      // add balances from private wallet to deployer wallet
+    xit('PATCHes allow GAS withdrawals', async () => {
+      // params
+      const value = '0.1';
+      const network = 'polygonMumbai';
+      const currency = evm.network.info(network).nativeCurrency.name;
+
+      // initial funding
+      const tx = await deployer.sendTransaction({
+        to: evm.wallet.address,
+        value: ethers.utils.parseEther(value),
+      });
+      await tx.wait();
+      response = await request(app)
+        .get('/balance')
+        .set('Cookie', cookies)
+        .send({ network });
+      if (response.status !== 200) console.error(response.body);
+      expect(response.status).to.equal(200);
+      expect(response.body).to.deep.equal({
+        info: `My balance is ${value} ${currency}.`,
+      });
+
+      // withdrawal request
+      await request(app)
+        .patch('/balance')
+        .set('Cookie', cookies)
+        .send({
+          network,
+          asset: { to: deployer.address, value: '0.01', type: 'gas' },
+        });
+      expectStatus(response, 200);
+      response = await request(app)
+        .get('/balance')
+        .set('Cookie', cookies)
+        .send({ network });
+      expectStatus(response, 200);
+      expect(response.body)
+        .to.haveOwnProperty('info')
+        .to.not.equal('My balance is 0.1 Mumbai MATIC.');
     });
 
-    xit('PATCHes allow withdrawals of gas', async () => {
-      //
+    xit('PATCHes allow ERC20 withdrawals', async () => {
+      const token = new ethers.Contract(
+        '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
+        require(`./routes/utils/evm/interfaces/ERC20.json`).abi,
+        deployer
+      );
+      const decimals = await token.decimals();
+      const amount = parseInt(
+        parseFloat('0.000001') * 10 ** decimals
+      ).toString();
+      const tx = await token.transferFrom(
+        deployer.address,
+        evm.wallet.address,
+        amount
+      );
+      await tx.wait();
     });
 
-    xit('gets setup (erc20)', async () => {
-      // add balances from private wallet to deployer wallet
+    xit('PATCHes allow ERC721 withdrawals', async () => {
+      const token = new ethers.Contract(
+        '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
+        require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
+        deployer
+      );
+      const tx = await token.transferFrom(
+        deployer.address,
+        evm.wallet.address,
+        704239
+      );
+      await tx.wait();
+      await request(app)
+        .patch('/balance')
+        .set('Cookie', cookies)
+        .send({
+          network,
+          asset: {
+            to: deployer.address,
+            value: '704239',
+            type: 'ERC721',
+            contractAddress: '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
+          },
+        });
+      expectStatus(response, 200);
     });
 
-    xit('PATCHes allow withdrawals of erc20s', async () => {
-      //
-    });
-
-    xit('gets setup (erc721)', async () => {
-      // add balances from private wallet to deployer wallet
-    });
-
-    xit('PATCHes allow withdrawals of erc721s', async () => {
-      //
-    });
+    xit('PATCHes allow ERC1155 withdrawals', async () => {});
   });
 
   context('cleanup', () => {
-    it('cleans up after itself', () => {
-      toDelete.forEach((file) => {
-        const pathTo = `./routes/utils/${file}.json`;
-        if (fs.existsSync(pathTo)) fs.rmSync(pathTo);
-        fs.copyFileSync(
-          './routes/utils/evm/ChainConfigBackup.json',
-          './routes/utils/evm/ChainConfig.json'
-        );
-      });
-    });
+    it('cleans up after itself', () => handle.cleanup());
   });
 });
