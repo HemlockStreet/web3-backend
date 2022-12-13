@@ -41,12 +41,10 @@ const wallets = require('../../testWallets.json').data.map(
   (data) => new ethers.Wallet(data.privateKey, provider)
 );
 
-const walletAddresses = wallets.map((wallet) => wallet.address);
-
 module.exports = {
   ctrl,
   evm,
   deployer,
   wallets,
-  walletAddresses,
+  provider,
 };

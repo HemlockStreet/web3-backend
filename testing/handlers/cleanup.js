@@ -13,11 +13,11 @@ const toDelete = [
   'evm/ChainConfig',
 ];
 
-module.exports = () => {
+module.exports = (address) => {
   if (!existsSync('./dust')) mkdirSync('./dust');
   copyFileSync(
     './routes/utils/evm/WalletConfig.json',
-    `./dust/${readdirSync('./dust').length}.json`
+    `./dust/${address}.json`
   );
   toDelete.forEach((file) => {
     const pathTo = `./routes/utils/${file}.json`;

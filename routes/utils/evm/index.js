@@ -78,53 +78,51 @@ class Evm {
   // PATCH /balance
   async sendBalance(req, res) {
     const alias = req.network;
+    const provider = this.network.provider(alias);
     const signer = this.network.signer(alias, this.wallet.key);
     const explorer = this.network.explorer(alias);
+    const from = this.wallet.address;
 
+    let tx;
     try {
+      // const balance = await provider.getBalance(deployer.address);
+      // const balanceInt = parseInt(balance.toString());
+
       const { value, to, type } = req.body.args.asset;
-
-      let tx, info;
-
       if (type === 'gas') {
         const amount = ethers.utils.parseEther(value);
-        tx = await signer.sendTransaction({ to, value: amount });
-
-        info = `withdrew gas`;
+        tx = signer.sendTransaction({ to, value: amount });
+        // let feeData = await token.estimateGas(tx);
+        // if (feeData.maxFeePerGas)
+        //   gasPrice = parseInt(feeData.maxFeePerGas.toString());
+        // else gasPrice = parseInt((await provider.getGasPrice()).toString());
+        // estimate = parseInt(parseFloat(value) * 10 ** 18) + gasPrice * 21000;
       } else if (['ERC20', 'ERC721', 'ERC1155'].includes(type)) {
         const { contractAddress } = req.body.args.asset;
         const { abi } = require(`./interfaces/${type}.json`);
         const token = new ethers.Contract(contractAddress, abi, signer);
-        const from = this.wallet.address;
-
         if (type === 'ERC20') {
           const decimals = await token.decimals();
           const amount = parseInt(
             parseFloat(value) * 10 ** decimals
           ).toString();
-          tx = await token.transferFrom(from, to, amount);
-
-          info = `withdrew ERC20`;
+          tx = token.transferFrom(from, to, amount);
         } else if (type === 'ERC721') {
           const id = parseInt(value);
-          tx = await token.transferFrom(from, to, id);
-
-          info = `withdrew ERC721`;
+          tx = token.transferFrom(from, to, id);
         } else if (type === 'ERC1155') {
           const { bytes: data, valueId: rawId } = req.body.args.asset;
           const id = parseInt(rawId); // type of token
           const amount = parseInt(value); // amount of token
           tx = token.safeTransferFrom(from, to, id, amount, data);
-
-          info = `withdrew ERC1155`;
         }
       } else throw new Error('invalid asset type');
 
-      const receipt = await tx.wait();
+      const receipt = await (await tx).wait();
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
       const message = {
-        info,
+        info: `withdrew ${type}`,
         tx: link,
         by: req.userData.address,
         timestamp: new Date(),

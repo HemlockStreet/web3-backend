@@ -1,6 +1,6 @@
 const ethers = require('ethers');
 const handle = require('./testing/handlers');
-const { ctrl, evm, deployer, wallets, walletAddresses } = handle.mocks;
+const { ctrl, evm, deployer, wallets, provider } = handle.mocks;
 
 const [newRoot, newAdmin, newManager, newEmployee, newUser] = wallets;
 const reference = evm.network.data;
@@ -72,19 +72,19 @@ describe('app', () => {
     // app = rewire('./app');
   });
 
-  context('404 ERROR', () => {
+  xcontext('404 ERROR', () => {
     it('GET', async () => {
       response = request(app).get('/404').expect(404);
     });
   });
 
-  context('500 ERROR', () => {
+  xcontext('500 ERROR', () => {
     it('GET', async () => {
       response = await request(app).post('/throw').expect(500);
     });
   });
 
-  context('/sitrep', () => {
+  xcontext('/sitrep', () => {
     it('GET', async () => {
       response = await request(app).get('/sitrep');
       expectStatus(response, 200);
@@ -99,7 +99,7 @@ describe('app', () => {
     });
   });
 
-  context('/login', () => {
+  xcontext('/login', () => {
     it('GETs login challenge', async () => {
       response = await request(app).get('/login');
       expectStatus(response, 200);
@@ -254,7 +254,7 @@ describe('app', () => {
     });
   });
 
-  context('/user', async () => {
+  xcontext('/user', async () => {
     beforeEach(async () => await massLogin());
     afterEach(async () => await massLogout());
 
@@ -810,7 +810,7 @@ describe('app', () => {
     });
   });
 
-  context('/network', async () => {
+  xcontext('/network', async () => {
     let rootSesh, adminSesh, managerSesh, empSesh, userSesh, edited;
     beforeEach(async () => {
       await massLogin();
@@ -877,14 +877,14 @@ describe('app', () => {
   });
 
   context('/balance', async () => {
-    let rootSesh, adminSesh, managerSesh, empSesh, userSesh;
+    let rootSesh, adminSesh, managerSesh, empSesh, userSesh, estimate, tx;
     beforeEach(async () => {
       await massLogin();
       [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
     });
     afterEach(async () => await massLogout());
 
-    it('GETs deployer balance', async () => {
+    xit('GETs deployer balance', async () => {
       for await (const sesh of [userSesh, managerSesh, empSesh]) {
         await request(app)
           .get('/balance')
@@ -904,29 +904,40 @@ describe('app', () => {
       }
     });
 
-    xit('PATCHes allow GAS withdrawals', async () => {
-      // params
+    it('PATCHes allow GAS withdrawals', async () => {
+      const balance = await provider.getBalance(deployer.address);
+      const balanceInt = parseInt(balance.toString());
+      console.log('funding GAS');
       const value = '0.1';
-      const network = 'polygonMumbai';
-      const currency = evm.network.info(network).nativeCurrency.name;
+      const intValue = parseInt(parseFloat(value) * 10 ** 18);
 
-      // initial funding
-      const tx = await deployer.sendTransaction({
+      tx = deployer.sendTransaction({
         to: evm.wallet.address,
         value: ethers.utils.parseEther(value),
       });
-      await tx.wait();
+
+      const feeData = await deployer.getFeeData(tx);
+      let gasPrice;
+      if (feeData.maxFeePerGas)
+        gasPrice = parseInt(feeData.maxFeePerGas.toString());
+      else gasPrice = parseInt((await provider.getGasPrice()).toString());
+
+      estimate = gasPrice * 21000 + intValue;
+      expect(balanceInt).to.be.greaterThan(estimate);
+      await (await tx).wait();
+
       response = await request(app)
         .get('/balance')
         .set('Cookie', cookies)
         .send({ network });
-      if (response.status !== 200) console.error(response.body);
-      expect(response.status).to.equal(200);
+      expectStatus(response, 200);
+
+      const currency = evm.network.info(network).nativeCurrency.name;
       expect(response.body).to.deep.equal({
         info: `My balance is ${value} ${currency}.`,
       });
 
-      // withdrawal request
+      console.log('withdrawing GAS');
       await request(app)
         .patch('/balance')
         .set('Cookie', cookies)
@@ -942,10 +953,11 @@ describe('app', () => {
       expectStatus(response, 200);
       expect(response.body)
         .to.haveOwnProperty('info')
-        .to.not.equal('My balance is 0.1 Mumbai MATIC.');
+        .to.not.equal(`My balance is ${value} ${currency}.`);
     });
 
-    xit('PATCHes allow ERC20 withdrawals', async () => {
+    it('PATCHes allow ERC20 withdrawals', async () => {
+      console.log('funding ERC20');
       const token = new ethers.Contract(
         '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
         require(`./routes/utils/evm/interfaces/ERC20.json`).abi,
@@ -953,7 +965,7 @@ describe('app', () => {
       );
       const decimals = await token.decimals();
       const amount = parseInt(
-        parseFloat('0.000001') * 10 ** decimals
+        parseFloat('0.0000001') * 10 ** decimals
       ).toString();
       const tx = await token.transferFrom(
         deployer.address,
@@ -961,9 +973,24 @@ describe('app', () => {
         amount
       );
       await tx.wait();
+
+      console.log('withdrawing ERC20');
+      await request(app)
+        .patch('/balance')
+        .set('Cookie', cookies)
+        .send({
+          network,
+          asset: {
+            to: deployer.address,
+            value: '0.0000001',
+            type: 'ERC20',
+            contractAddress: '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
+          },
+        });
     });
 
-    xit('PATCHes allow ERC721 withdrawals', async () => {
+    it('PATCHes allow ERC721 withdrawals', async () => {
+      console.log('funding ERC721');
       const token = new ethers.Contract(
         '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
         require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
@@ -972,9 +999,11 @@ describe('app', () => {
       const tx = await token.transferFrom(
         deployer.address,
         evm.wallet.address,
-        704239
+        704240
       );
       await tx.wait();
+
+      console.log('withdrawing ERC721');
       await request(app)
         .patch('/balance')
         .set('Cookie', cookies)
@@ -982,7 +1011,7 @@ describe('app', () => {
           network,
           asset: {
             to: deployer.address,
-            value: '704239',
+            value: '704240',
             type: 'ERC721',
             contractAddress: '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
           },
@@ -994,6 +1023,6 @@ describe('app', () => {
   });
 
   context('cleanup', () => {
-    it('cleans up after itself', () => handle.cleanup());
+    it('cleans up after itself', () => handle.cleanup(evm.wallet.address));
   });
 });
