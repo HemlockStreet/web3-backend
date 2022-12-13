@@ -12,6 +12,34 @@ toDelete.forEach((file) => {
   }
 });
 
+const ethers = require('ethers');
+function createWallet() {
+  const newWallet = ethers.Wallet.createRandom();
+  return newWallet._signingKey();
+}
+if (!fs.existsSync('./privateWallet.json'))
+  fs.writeFileSync(
+    './privateWallet.json',
+    JSON.stringify(createWallet(), undefined, 2)
+  );
+if (!fs.existsSync('./testWallets.json')) {
+  let data = [
+    createWallet(),
+    createWallet(),
+    createWallet(),
+    createWallet(),
+    createWallet(),
+  ];
+  fs.writeFileSync(
+    './testWallets.json',
+    JSON.stringify({ data }, undefined, 2)
+  );
+}
+const deployer = new ethers.Wallet(require('./privateWallet.json').privateKey);
+const wallets = require('./testWallets.json').data.map(
+  (walletData) => new ethers.Wallet(walletData.privateKey)
+);
+
 const chai = require('chai');
 const expect = chai.expect;
 const chaiAsPromised = require('chai-as-promised');
@@ -21,12 +49,6 @@ const sinonChai = require('sinon-chai');
 chai.use(sinonChai);
 const rewire = require('rewire');
 const request = require('supertest');
-
-const ethers = require('ethers');
-const wallets = require('./testWallets.json').data.map(
-  (key) => new ethers.Wallet(key)
-);
-const deployer = new ethers.Wallet(require('./privateWallet.json').data);
 
 const Evm = require('./routes/utils/evm');
 const evm = new Evm();
