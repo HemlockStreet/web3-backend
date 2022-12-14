@@ -1,30 +1,35 @@
-const {
-  existsSync,
-  mkdirSync,
-  copyFileSync,
-  readdirSync,
-  rmSync,
-} = require('fs');
+const { existsSync, mkdirSync, copyFileSync, rmSync } = require('fs');
 
-const toDelete = [
-  'AccessController/EncryptionTokens',
-  'AccessController/SessionData',
-  'evm/WalletConfig',
-  'evm/ChainConfig',
-];
+const pathTo = {
+  dust: './testing/dust',
+  evm: './routes/utils/evm',
+  AccessController: './routes/utils/AccessController',
+};
 
-module.exports = (address) => {
-  if (!existsSync('./dust')) mkdirSync('./dust');
-  copyFileSync(
-    './routes/utils/evm/WalletConfig.json',
-    `./dust/${address}.json`
-  );
-  toDelete.forEach((file) => {
+if (!existsSync(pathTo.dust))
+  mkdirSync(pathTo.dust + '/active', { recursive: true });
+
+module.exports = (address, funded, active) => {
+  if (funded)
+    copyFileSync(
+      `${pathTo.evm}/WalletConfig.json`,
+      active
+        ? `${pathTo.dust}/active/${address}.json`
+        : `${pathTo.dust}/${address}.json`
+    );
+
+  [
+    'AccessController/EncryptionTokens',
+    'AccessController/SessionData',
+    'evm/WalletConfig',
+    'evm/ChainConfig',
+  ].forEach((file) => {
     const pathTo = `./routes/utils/${file}.json`;
     if (existsSync(pathTo)) rmSync(pathTo);
-    copyFileSync(
-      './routes/utils/evm/ChainConfigBackup.json',
-      './routes/utils/evm/ChainConfig.json'
-    );
   });
+
+  copyFileSync(
+    `${pathTo.evm}/ChainConfigBackup.json`,
+    `${pathTo.evm}/ChainConfig.json`
+  );
 };

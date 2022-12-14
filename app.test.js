@@ -72,19 +72,19 @@ describe('app', () => {
     // app = rewire('./app');
   });
 
-  xcontext('404 ERROR', () => {
+  context('404 ERROR', () => {
     it('GET', async () => {
       response = request(app).get('/404').expect(404);
     });
   });
 
-  xcontext('500 ERROR', () => {
+  context('500 ERROR', () => {
     it('GET', async () => {
       response = await request(app).post('/throw').expect(500);
     });
   });
 
-  xcontext('/sitrep', () => {
+  context('/sitrep', () => {
     it('GET', async () => {
       response = await request(app).get('/sitrep');
       expectStatus(response, 200);
@@ -99,7 +99,7 @@ describe('app', () => {
     });
   });
 
-  xcontext('/login', () => {
+  context('/login', () => {
     it('GETs login challenge', async () => {
       response = await request(app).get('/login');
       expectStatus(response, 200);
@@ -254,7 +254,7 @@ describe('app', () => {
     });
   });
 
-  xcontext('/user', async () => {
+  context('/user', async () => {
     beforeEach(async () => await massLogin());
     afterEach(async () => await massLogout());
 
@@ -810,7 +810,7 @@ describe('app', () => {
     });
   });
 
-  xcontext('/network', async () => {
+  context('/network', async () => {
     let rootSesh, adminSesh, managerSesh, empSesh, userSesh, edited;
     beforeEach(async () => {
       await massLogin();
@@ -876,15 +876,30 @@ describe('app', () => {
     });
   });
 
+  let anomalous;
+
+  let funded = {
+    gas: false,
+    tkn: false,
+    nft: false,
+  };
+
   context('/balance', async () => {
-    let rootSesh, adminSesh, managerSesh, empSesh, userSesh, estimate, tx;
+    let rootSesh,
+      adminSesh,
+      managerSesh,
+      empSesh,
+      userSesh,
+      gasValue,
+      sufficient,
+      tx;
     beforeEach(async () => {
       await massLogin();
       [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
     });
     afterEach(async () => await massLogout());
 
-    xit('GETs deployer balance', async () => {
+    it('GETs deployer balance', async () => {
       for await (const sesh of [userSesh, managerSesh, empSesh]) {
         await request(app)
           .get('/balance')
@@ -898,131 +913,241 @@ describe('app', () => {
           .set('Cookie', sesh)
           .send({ network });
         expectStatus(response, 200);
-        expect(response.body)
-          .to.haveOwnProperty('info')
-          .to.equal('My balance is 0.0 Mumbai MATIC.');
+        expect(response.body).to.haveOwnProperty('info');
       }
+      expect(response.body).to.haveOwnProperty('info');
+      if (response.body.info !== 'My balance is 0.0 Mumbai MATIC.')
+        anomalous = true;
+    });
+
+    async function estimateRawTxFee(prov, printMe = false) {
+      const gasLimit = 21000;
+      const raw = await prov.getFeeData();
+
+      let gasPrice, feeData;
+
+      feeData = {};
+      Object.keys(raw).forEach(
+        (key) => (feeData[key] = parseInt(raw[key].toString()))
+      );
+      if (feeData.maxFeePerGas) gasPrice = feeData.maxFeePerGas;
+      else gasPrice = parseInt((await prov.getGasPrice()).toString());
+      const estimate = gasPrice * gasLimit;
+
+      if (printMe) {
+        console.log('feeData', feeData);
+        console.log('gasPrice', gasPrice);
+        console.log('estimate', estimate);
+      }
+
+      return estimate;
+    }
+
+    async function estimateContFee(prov, printMe = false) {
+      //
+    }
+
+    it('has a properly funded deployer wallet', async () => {
+      let estimate;
+
+      // gas
+      estimate = await estimateRawTxFee(provider, true);
+      expect(typeof estimate).to.equal('number');
+      gasValue = estimate * 128;
+
+      // erc20
+      // erc721
+      // erc1155
+
+      // check total
+      const raw = await provider.getBalance(deployer.address);
+      const balance = parseInt(raw.toString());
+      sufficient = balance > gasValue;
+      expect(sufficient).to.be.true;
+    });
+
+    async function serverFunding() {
+      try {
+        tx = await deployer.sendTransaction({
+          to: evm.wallet.address,
+          value: gasValue,
+        });
+        await tx.wait();
+        funded.gas = true;
+      } catch {
+        if (funded.gas) await gasRetrieval();
+        throw new Error('Funding Failure!');
+      }
+    }
+
+    async function refundAmount(printMe = false) {
+      const estimate = await estimateRawTxFee(provider, printMe);
+      const raw = await provider.getBalance(evm.wallet.address);
+      const balance = parseInt(raw.toString());
+      return balance - estimate * 2;
+    }
+
+    async function gasRetrieval() {
+      const toRefund = await refundAmount();
+      try {
+        const refund = await evm.network
+          .signer(network, evm.wallet.key)
+          .sendTransaction({
+            to: deployer.address,
+            value: toRefund,
+          });
+        await refund.wait();
+        funded.gas = false;
+      } catch {
+        throw new Error('Refund Failure!');
+      }
+    }
+
+    // DEBUG ONLY (LEAVE COMMENTED)
+    // it('can perform transactions', async () => {
+    //   if (!sufficient) throw new Error('insufficient funds');
+
+    //   let raw, balance, updated;
+
+    //   raw = await provider.getBalance(evm.wallet.address);
+    //   balance = parseInt(raw.toString());
+    //   console.log(gasValue);
+    //   await serverFunding();
+    //   expect(funded.gas).to.be.true;
+    //   if (balance !== 0) anomalous = true;
+
+    //   raw = await provider.getBalance(evm.wallet.address);
+    //   updated = parseInt(raw.toString());
+    //   expect(updated).to.not.equal(balance);
+    //   balance = updated;
+
+    //   await gasRetrieval(true);
+    //   expect(funded.gas).to.be.false;
+    //   raw = await provider.getBalance(evm.wallet.address);
+    //   updated = parseInt(raw.toString());
+    //   expect(updated).to.not.equal(balance);
+    //   balance = updated;
+    // });
+
+    it('accepts gas funding', async () => {
+      await serverFunding();
+      response = await request(app)
+        .get('/balance')
+        .set('Cookie', cookies)
+        .send({ network });
+      expectStatus(response, 200);
+      const currency = evm.network.info(network).nativeCurrency.name;
+      expect(response.body).to.deep.equal({
+        info: `My balance is ${(gasValue / 10 ** 18).toString()} ${currency}.`,
+      });
     });
 
     it('PATCHes allow GAS withdrawals', async () => {
-      const balance = await provider.getBalance(deployer.address);
-      const balanceInt = parseInt(balance.toString());
-      console.log('funding GAS');
-      const value = '0.1';
-      const intValue = parseInt(parseFloat(value) * 10 ** 18);
+      const estimate = await estimateRawTxFee(provider);
+      const value = (estimate / 10 ** 18).toString();
 
-      tx = deployer.sendTransaction({
-        to: evm.wallet.address,
-        value: ethers.utils.parseEther(value),
-      });
-
-      const feeData = await deployer.getFeeData(tx);
-      let gasPrice;
-      if (feeData.maxFeePerGas)
-        gasPrice = parseInt(feeData.maxFeePerGas.toString());
-      else gasPrice = parseInt((await provider.getGasPrice()).toString());
-
-      estimate = gasPrice * 21000 + intValue;
-      expect(balanceInt).to.be.greaterThan(estimate);
-      await (await tx).wait();
+      await request(app)
+        .patch('/balance')
+        .set('Cookie', cookies)
+        .send({
+          network,
+          asset: { to: deployer.address, value, type: 'gas' },
+        });
+      if (response.status !== 200) await gasRetrieval();
+      expectStatus(response, 200);
 
       response = await request(app)
         .get('/balance')
         .set('Cookie', cookies)
         .send({ network });
       expectStatus(response, 200);
-
       const currency = evm.network.info(network).nativeCurrency.name;
       expect(response.body).to.deep.equal({
-        info: `My balance is ${value} ${currency}.`,
+        info: `My balance is ${(
+          gasValue / 10 ** 18 -
+          parseInt(value * 2)
+        ).toString()} ${currency}.`,
       });
-
-      console.log('withdrawing GAS');
-      await request(app)
-        .patch('/balance')
-        .set('Cookie', cookies)
-        .send({
-          network,
-          asset: { to: deployer.address, value: '0.01', type: 'gas' },
-        });
-      expectStatus(response, 200);
-      response = await request(app)
-        .get('/balance')
-        .set('Cookie', cookies)
-        .send({ network });
-      expectStatus(response, 200);
-      expect(response.body)
-        .to.haveOwnProperty('info')
-        .to.not.equal(`My balance is ${value} ${currency}.`);
     });
 
-    it('PATCHes allow ERC20 withdrawals', async () => {
-      console.log('funding ERC20');
-      const token = new ethers.Contract(
-        '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
-        require(`./routes/utils/evm/interfaces/ERC20.json`).abi,
-        deployer
-      );
-      const decimals = await token.decimals();
-      const amount = parseInt(
-        parseFloat('0.0000001') * 10 ** decimals
-      ).toString();
-      const tx = await token.transferFrom(
-        deployer.address,
-        evm.wallet.address,
-        amount
-      );
-      await tx.wait();
+    // xit('PATCHes allow ERC20 withdrawals', async () => {
+    //   if (!funded.gas) throw new Error('server wallet not funded');
+    //   console.log('funding ERC20');
+    //   const token = new ethers.Contract(
+    //     '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
+    //     require(`./routes/utils/evm/interfaces/ERC20.json`).abi,
+    //     deployer
+    //   );
+    //   const decimals = await token.decimals();
+    //   const amount = parseInt(
+    //     parseFloat('0.0000001') * 10 ** decimals
+    //   ).toString();
+    //   const tx = await token.transferFrom(
+    //     deployer.address,
+    //     evm.wallet.address,
+    //     amount
+    //   );
+    //   await tx.wait();
 
-      console.log('withdrawing ERC20');
-      await request(app)
-        .patch('/balance')
-        .set('Cookie', cookies)
-        .send({
-          network,
-          asset: {
-            to: deployer.address,
-            value: '0.0000001',
-            type: 'ERC20',
-            contractAddress: '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
-          },
-        });
-    });
+    //   console.log('withdrawing ERC20');
+    //   await request(app)
+    //     .patch('/balance')
+    //     .set('Cookie', cookies)
+    //     .send({
+    //       network,
+    //       asset: {
+    //         to: deployer.address,
+    //         value: '0.0000001',
+    //         type: 'ERC20',
+    //         contractAddress: '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
+    //       },
+    //     });
+    // });
 
-    it('PATCHes allow ERC721 withdrawals', async () => {
-      console.log('funding ERC721');
-      const token = new ethers.Contract(
-        '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
-        require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
-        deployer
-      );
-      const tx = await token.transferFrom(
-        deployer.address,
-        evm.wallet.address,
-        704240
-      );
-      await tx.wait();
+    // xit('PATCHes allow ERC721 withdrawals', async () => {
+    //   if (!funded.gas) throw new Error('server wallet not funded');
+    //   console.log('funding ERC721');
+    //   const token = new ethers.Contract(
+    //     '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
+    //     require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
+    //     deployer
+    //   );
+    //   const tx = await token.transferFrom(
+    //     deployer.address,
+    //     evm.wallet.address,
+    //     704240
+    //   );
+    //   await tx.wait();
 
-      console.log('withdrawing ERC721');
-      await request(app)
-        .patch('/balance')
-        .set('Cookie', cookies)
-        .send({
-          network,
-          asset: {
-            to: deployer.address,
-            value: '704240',
-            type: 'ERC721',
-            contractAddress: '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
-          },
-        });
-      expectStatus(response, 200);
-    });
+    //   console.log('withdrawing ERC721');
+    //   await request(app)
+    //     .patch('/balance')
+    //     .set('Cookie', cookies)
+    //     .send({
+    //       network,
+    //       asset: {
+    //         to: deployer.address,
+    //         value: '704240',
+    //         type: 'ERC721',
+    //         contractAddress: '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
+    //       },
+    //     });
+    //   expectStatus(response, 200);
+    // });
 
-    xit('PATCHes allow ERC1155 withdrawals', async () => {});
+    // xit('PATCHes allow ERC1155 withdrawals', async () => {
+    //   if (!funded.gas) throw new Error('server wallet not funded');
+    // });
+
+    it('Refunds at the end', async () => await gasRetrieval());
   });
 
   context('cleanup', () => {
-    it('cleans up after itself', () => handle.cleanup(evm.wallet.address));
+    it('cleans up after itself', () =>
+      handle.cleanup(
+        evm.wallet.address,
+        funded.gas || funded.nft || funded.tkn,
+        anomalous
+      ));
   });
 });

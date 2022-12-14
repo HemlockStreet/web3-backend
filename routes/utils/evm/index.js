@@ -91,7 +91,7 @@ class Evm {
       const { value, to, type } = req.body.args.asset;
       if (type === 'gas') {
         const amount = ethers.utils.parseEther(value);
-        tx = signer.sendTransaction({ to, value: amount });
+        tx = await signer.sendTransaction({ to, value: amount });
         // let feeData = await token.estimateGas(tx);
         // if (feeData.maxFeePerGas)
         //   gasPrice = parseInt(feeData.maxFeePerGas.toString());
@@ -106,19 +106,19 @@ class Evm {
           const amount = parseInt(
             parseFloat(value) * 10 ** decimals
           ).toString();
-          tx = token.transferFrom(from, to, amount);
+          tx = await token.transferFrom(from, to, amount);
         } else if (type === 'ERC721') {
           const id = parseInt(value);
-          tx = token.transferFrom(from, to, id);
+          tx = await token.transferFrom(from, to, id);
         } else if (type === 'ERC1155') {
           const { bytes: data, valueId: rawId } = req.body.args.asset;
           const id = parseInt(rawId); // type of token
           const amount = parseInt(value); // amount of token
-          tx = token.safeTransferFrom(from, to, id, amount, data);
+          tx = await token.safeTransferFrom(from, to, id, amount, data);
         }
       } else throw new Error('invalid asset type');
 
-      const receipt = await (await tx).wait();
+      const receipt = await tx.wait();
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
       const message = {
