@@ -78,47 +78,94 @@ class Evm {
   // PATCH /balance
   async sendBalance(req, res) {
     const alias = req.network;
-    const provider = this.network.provider(alias);
     const signer = this.network.signer(alias, this.wallet.key);
     const explorer = this.network.explorer(alias);
     const from = this.wallet.address;
 
-    let tx;
-    try {
-      // const balance = await provider.getBalance(deployer.address);
-      // const balanceInt = parseInt(balance.toString());
+    const gasBalance = parseInt(
+      (await this.network.provider(alias).getBalance(signer.address)).toString()
+    );
 
-      const { value, to, type } = req.body.args.asset;
+    let tx, receipt, fees, balance, tokenOwner;
+    try {
+      const asset = req.body.args.asset;
+      const { value, to, type } = asset;
       if (type === 'gas') {
-        const amount = ethers.utils.parseEther(value);
-        tx = await signer.sendTransaction({ to, value: amount });
-        // let feeData = await token.estimateGas(tx);
-        // if (feeData.maxFeePerGas)
-        //   gasPrice = parseInt(feeData.maxFeePerGas.toString());
-        // else gasPrice = parseInt((await provider.getGasPrice()).toString());
-        // estimate = parseInt(parseFloat(value) * 10 ** 18) + gasPrice * 21000;
+        fees = await this.network.getGasWithdrawalFee(alias);
+        const requiredAmount = fees * 2 + parseInt(value);
+
+        if (gasBalance < requiredAmount)
+          return res.status(400).json({
+            info: 'insufficient gas balance',
+            gasBalance,
+            fees: requiredAmount,
+          });
+
+        tx = await signer.sendTransaction({ to, value });
       } else if (['ERC20', 'ERC721', 'ERC1155'].includes(type)) {
-        const { contractAddress } = req.body.args.asset;
+        const { contractAddress } = asset;
         const { abi } = require(`./interfaces/${type}.json`);
         const token = new ethers.Contract(contractAddress, abi, signer);
-        if (type === 'ERC20') {
-          const decimals = await token.decimals();
-          const amount = parseInt(
-            parseFloat(value) * 10 ** decimals
-          ).toString();
-          tx = await token.transferFrom(from, to, amount);
-        } else if (type === 'ERC721') {
-          const id = parseInt(value);
-          tx = await token.transferFrom(from, to, id);
+        if (['ERC20', 'ERC721'].includes(type)) {
+          if (type === 'ERC20') {
+            balance = parseInt(
+              (await token.balanceOf(signer.address)).toString()
+            );
+            if (balance < parseInt(value))
+              return res
+                .status(400)
+                .json({ info: 'insufficient token balance' });
+          } else {
+            tokenOwner = await token.ownerOf(value);
+            if (tokenOwner !== signer.address)
+              return res.status(400).json({
+                info: 'evm.wallet !== tokenOwner',
+                evmWallet: signer.address,
+                tokenOwner,
+              });
+          }
+
+          fees = await this.network.getTokenWithdrawalFee(
+            alias,
+            token,
+            'transferFrom',
+            [from, to, value]
+          );
+          if (gasBalance < fees * 2)
+            return res.status(400).json({
+              info: 'insufficient gas balance',
+              gasBalance,
+              fees: fees * 2,
+            });
+
+          tx = await token.transferFrom(from, to, value);
         } else if (type === 'ERC1155') {
-          const { bytes: data, valueId: rawId } = req.body.args.asset;
+          const { bytes: data, valueId: rawId } = asset;
           const id = parseInt(rawId); // type of token
-          const amount = parseInt(value); // amount of token
-          tx = await token.safeTransferFrom(from, to, id, amount, data);
+
+          // BUG || non-urgent
+          // does not check to see if the ERC155 token is owned
+          // wastes gas
+
+          fees = await this.network.getTokenWithdrawalFee(
+            alias,
+            token,
+            'safeTransferFrom',
+            [from, to, id, value, data]
+          );
+          if (gasBalance < fees * 2)
+            return res.status(400).json({
+              info: 'insufficient gas balance',
+              gasBalance,
+              fees: fees * 2,
+            });
+
+          tx = await token.safeTransferFrom(from, to, id, value, data);
         }
       } else throw new Error('invalid asset type');
 
-      const receipt = await tx.wait();
+      receipt = await tx.wait(2);
+
       const link = `${explorer}/tx/${receipt.transactionHash}`;
 
       const message = {

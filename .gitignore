@@ -6,9 +6,9 @@ package-lock.json
 **/Sessions.json
 **/EncryptionTokens.json
 **/SessionData.json
-testWallets.json
-privateWallet.json
-dust
+
+testing/wallets
+testing/dust
 
 .nyc_output
 logs

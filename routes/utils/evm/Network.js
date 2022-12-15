@@ -182,4 +182,47 @@ module.exports = class Network extends LocalData {
     super.ingress(this.data);
     return true;
   }
+
+  async getGasPrice(alias, printMe = false) {
+    const provider = this.provider(alias);
+    let result;
+    const raw = await provider.getFeeData();
+    let feeData = {};
+    Object.keys(raw).forEach(
+      (key) => (feeData[key] = parseInt(raw[key].toString()))
+    );
+    if (feeData.maxFeePerGas) result = feeData.maxFeePerGas;
+    else result = parseInt((await provider.getGasPrice()).toString());
+
+    if (printMe) console.log('feeData', feeData);
+    return result;
+  }
+
+  async getGasWithdrawalFee(alias, printMe = false) {
+    const gasPrice = await this.getGasPrice(alias, printMe);
+
+    const gasLimit = 21000;
+    const estimate = gasPrice * gasLimit;
+
+    if (printMe) {
+      console.log('gasPrice', gasPrice);
+      console.log('estimate', estimate);
+    }
+
+    return estimate;
+  }
+
+  async getTokenWithdrawalFee(alias, token, method, args, printMe = false) {
+    const gasPrice = await this.getGasPrice(alias, printMe);
+
+    let raw = await token.estimateGas[method](...args);
+    const interactionFee = parseInt(raw.toString());
+    const estimate = gasPrice * interactionFee;
+
+    if (printMe) {
+      console.log('gasPrice', gasPrice);
+      console.log('estimate', estimate);
+    }
+    return estimate;
+  }
 };

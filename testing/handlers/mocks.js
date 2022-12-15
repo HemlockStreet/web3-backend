@@ -14,11 +14,11 @@ const newWallet = () => {
 // create new wallets if missing
 let pathTo;
 
-pathTo = './privateWallet.json';
+pathTo = './testing/wallets/privateWallet.json';
 if (!existsSync(pathTo))
   writeFileSync(pathTo, JSON.stringify(newWallet(), undefined, 2));
 
-pathTo = './testWallets.json';
+pathTo = './testing/wallets/testWallets.json';
 if (!existsSync(pathTo))
   writeFileSync(
     pathTo,
@@ -33,11 +33,11 @@ if (!existsSync(pathTo))
 
 // get signers
 const deployer = new ethers.Wallet(
-  require('../../privateWallet.json').privateKey,
+  require('../wallets/privateWallet.json').privateKey,
   provider
 );
 
-const wallets = require('../../testWallets.json').data.map(
+const wallets = require('../wallets/testWallets.json').data.map(
   (data) => new ethers.Wallet(data.privateKey, provider)
 );
 
