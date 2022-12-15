@@ -1,12 +1,12 @@
 const ethers = require('ethers');
 const handle = require('./testing/handlers');
 const { ctrl, evm, deployer, wallets, provider } = handle.mocks;
-
 const [newRoot, newAdmin, newManager, newEmployee, newUser] = wallets;
 const reference = evm.network.data;
 const network = 'polygonMumbai';
 const { polygonMumbai } = reference;
 const networkDetails = polygonMumbai;
+const serverSigner = evm.network.signer(network, evm.wallet.key);
 
 const chai = require('chai');
 const expect = chai.expect;
@@ -885,7 +885,7 @@ describe('app', () => {
     gas: false,
     tkn: false,
     nft: false,
-    sft: false,
+    sft: { id1: false, id2: false },
   };
 
   context('/balance', () => {
@@ -899,6 +899,12 @@ describe('app', () => {
       tx,
       goodToGo;
 
+    beforeEach(async () => {
+      await massLogin();
+      [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
+    });
+    afterEach(async () => await massLogout());
+
     const contracts = {
       tkn: new ethers.Contract(
         '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
@@ -906,15 +912,14 @@ describe('app', () => {
         deployer
       ),
       nft: new ethers.Contract(
-        '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b',
-        require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
-        deployer
+        '0xd4bBbbc27fDA78572477Ed068BAc747A42aFfafB',
+        require(`./testing/interfaces/ERC721.json`).abi,
+        serverSigner
       ),
-      // BUG || missing data
       sft: new ethers.Contract(
-        '0xf5de760f2e916647fd766B4AD9E85ff943cE3A2b', // SET ME
-        require(`./routes/utils/evm/interfaces/ERC1155.json`).abi,
-        deployer
+        '0xd71435dae28398De7C5bfaDfC2FfEA336c688487',
+        require(`./testing/interfaces/ERC1155.json`).abi,
+        serverSigner
       ),
     };
 
@@ -930,18 +935,54 @@ describe('app', () => {
         type: 'ERC20',
         contractAddress: contracts.tkn.address,
       },
+      // @ERC721
+      // SPDX-License-Identifier: MIT
+      // pragma solidity >=0.7.0 <0.9.0;
+      // import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+      // contract ERC721Mintable is ERC721 {
+      //     uint public _tokenIds;
+      //     function mint() public returns (uint) {
+      //         _tokenIds++;
+      //         _mint(msg.sender, _tokenIds);
+      //         return _tokenIds;
+      //     }
+      //     function _baseURI() internal pure override returns (string memory) {
+      //         return "ipfs://QmQvYD4LqDdB8gMaVh7vzGfBmApv1kdfGmToQ2B3t2QsU1";
+      //     }
+      //     constructor() ERC721("Expensive JPEG", "$JPG") {}
+      // }
       nft: {
         to: deployer.address,
         value: 704237,
         type: 'ERC721',
         contractAddress: contracts.nft.address,
       },
-      // BUG || missing data
+      // @ERC1155
+      // SPDX-License-Identifier: MIT
+      // pragma solidity >=0.7.0 <0.9.0;
+      // import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+      // import "@openzeppelin/contracts/utils/Strings.sol";
+      // contract ERC1155Mintable is ERC1155 {
+      //     using Strings for uint;
+      //     constructor() ERC1155("https://www.google.com/search?q=") {}
+      //     function mint(uint _id, uint amount) public {
+      //         bytes memory data = bytes(_id.toString());
+      //         _mint(msg.sender, _id, amount, data);
+      //     }
+      // }
       sft: {
         to: deployer.address,
-        value: 777, // SET ME
-        valueId: 777, // SET ME
-        data: '0x0', // SET ME
+        value: 1,
+        valueId: 2,
+        data: 0xabcdef,
+        type: 'ERC1155',
+        contractAddress: contracts.sft.address,
+      },
+      sftAlt: {
+        to: deployer.address,
+        value: [1, 1],
+        valueId: [1, 2],
+        data: 0xabcdef,
         type: 'ERC1155',
         contractAddress: contracts.sft.address,
       },
@@ -994,9 +1035,11 @@ describe('app', () => {
         raw = await contract.estimateGas.safeTransferFrom(...args);
       } else throw new Error('unsupported token standard');
 
-      const interactionFee = parseInt(raw.toString());
-      const gasPrice = await getGasPrice(prov, printMe);
-      const estimate = gasPrice * interactionFee;
+      let interactionFee = parseInt(raw.toString());
+      let gasPrice = await getGasPrice(prov, printMe);
+      let estimate = gasPrice * interactionFee;
+
+      if (interface === 'ERC1155') estimate += estimate;
 
       if (printMe) {
         console.log('gasPrice', gasPrice);
@@ -1004,12 +1047,6 @@ describe('app', () => {
       }
       return estimate;
     }
-
-    beforeEach(async () => {
-      await massLogin();
-      [rootSesh, adminSesh, managerSesh, empSesh, userSesh] = sessions;
-    });
-    afterEach(async () => await massLogout());
 
     it('GETs deployer balance', async () => {
       for await (const sesh of [userSesh, managerSesh, empSesh]) {
@@ -1055,6 +1092,7 @@ describe('app', () => {
       gasValue += estimate * 16;
 
       console.log('estimating erc721 fees');
+      asset.nft.value = parseInt((await contracts.nft._tokenIds()).toString());
       estimate = await estimateContFee(
         provider,
         'ERC721',
@@ -1065,23 +1103,22 @@ describe('app', () => {
       expect(typeof estimate).to.equal('number');
       gasValue += estimate * 16;
 
-      // BUG || missing feature
-      // console.log('estimating erc1155 fees');
-      // estimate = await estimateContFee(
-      //   provider,
-      //   'ERC1155',
-      //   contracts.tkn.address,
-      //   [
-      //     deployer.address,
-      //     evm.wallet.address,
-      //     asset.sft.valueId,
-      //     asset.sft.value,
-      //     asset.sft.data,
-      //   ]
-      //   // true // DEBUG
-      // );
-      // expect(typeof estimate).to.equal('number');
-      // gasValue += estimate * 16;
+      console.log('estimating erc1155 fees');
+      estimate = await estimateContFee(
+        provider,
+        'ERC1155',
+        contracts.tkn.address,
+        [
+          deployer.address,
+          evm.wallet.address,
+          asset.sft.valueId,
+          asset.sft.value,
+          asset.sft.data,
+        ]
+        // true // DEBUG
+      );
+      expect(typeof estimate).to.equal('number');
+      gasValue += estimate * 16;
 
       console.log('assessing deployer balance...');
       const raw = await provider.getBalance(deployer.address);
@@ -1107,20 +1144,24 @@ describe('app', () => {
         }
       }
 
-      console.log('\n depositing rest of tokens...');
+      console.log('\ndepositing rest of tokens...');
       if (funded.gas)
         for (let i = 0; i < 10; i++) {
-          if ([funded.tkn, funded.nft, funded.sft].includes(false)) {
+          if (
+            [funded.tkn, funded.nft, funded.sft.id1, funded.sft.id2].includes(
+              false
+            )
+          ) {
             console.log('attempt', i + 1);
             let failed = false;
             if (!funded.tkn) {
               try {
+                console.log('depositing tkn...');
                 tx = await contracts.tkn.transferFrom(
                   deployer.address,
                   evm.wallet.address,
                   asset.tkn.value
                 );
-                console.log('depositing tkn...');
                 await tx.wait(2);
                 funded.tkn = true;
               } catch {
@@ -1129,25 +1170,33 @@ describe('app', () => {
             }
             if (!funded.nft) {
               try {
-                console.log('depositing nft...');
-                tx = await contracts.nft.transferFrom(
-                  deployer.address,
-                  evm.wallet.address,
-                  asset.nft.value
-                );
+                console.log('minting nft...');
+                tx = await contracts.nft.mint();
                 await tx.wait(2);
+                asset.nft.value = parseInt(
+                  (await contracts.nft._tokenIds()).toString()
+                );
                 funded.nft = true;
               } catch {
                 failed = true;
               }
             }
-            if (!funded.sft) {
+            if (!funded.sft.id1) {
               try {
-                // BUG || missing feature
-                console.log('depositing sft...');
-                // tx = await contracts.sft.
-                // await tx.wait(2);
-                funded.sft = true;
+                console.log('minting sft (type 1)...');
+                tx = await contracts.sft.mint(1, 1);
+                await tx.wait(2);
+                funded.sft.id1 = true;
+              } catch {
+                failed = true;
+              }
+            }
+            if (!funded.sft.id2) {
+              try {
+                console.log('minting sft (type 2)...');
+                tx = await contracts.sft.mint(2, 2);
+                await tx.wait(2);
+                funded.sft.id2 = true;
               } catch {
                 failed = true;
               }
@@ -1161,7 +1210,8 @@ describe('app', () => {
       expect(funded.gas).to.be.true;
       expect(funded.tkn).to.be.true;
       expect(funded.nft).to.be.true;
-      expect(funded.sft).to.be.true;
+      expect(funded.sft.id1).to.be.true;
+      expect(funded.sft.id2).to.be.true;
       goodToGo = true;
     }
 
@@ -1175,14 +1225,6 @@ describe('app', () => {
       expect(
         parseInt((await contracts.tkn.balanceOf(deployer.address)).toString())
       ).to.be.greaterThan(asset.tkn.value);
-
-      console.log('NFT Checkpoint');
-      expect(await contracts.nft.ownerOf(asset.nft.value)).to.equal(
-        deployer.address
-      );
-
-      console.log('SFT Checkpoint');
-      // BUG || missing feature
 
       console.log('\nintentionally failing withdrawals...');
       console.log('gas');
@@ -1209,6 +1251,13 @@ describe('app', () => {
         .set('Cookie', cookies)
         .send({ network, args: { asset: asset.sft } });
       expectStatus(response, 400);
+      console.log('sft (batch)');
+      response = await request(app)
+        .patch('/balance')
+        .set('Cookie', cookies)
+        .send({ network, args: { asset: asset.sftAlt } });
+      expectStatus(response, 400);
+
       console.log('\nattempting to fund server wallet...');
       await fundingAttempt();
       expect(goodToGo).to.be.true;
@@ -1286,9 +1335,7 @@ describe('app', () => {
       );
     });
 
-    // BUG || missing feature
-    // check ERC1155 withdrawals
-    xit('PATCHes allow ERC1155 withdrawals', async () => {
+    it('PATCHes allow ERC1155 withdrawals', async () => {
       if (!goodToGo) throw new Error('server wallet not funded');
       console.log('withdrawing sft...');
 
@@ -1306,72 +1353,67 @@ describe('app', () => {
         }
       }
       expectStatus(response, 200);
-      funded.sft = false;
-      // expect(await contracts.sft.ownerOf(asset.sft.value)).to.equal(
-      //   deployer.address
-      // );
+
+      const batchBalance = await contracts.sft.balanceOfBatch(
+        [evm.wallet.address, evm.wallet.address],
+        [1, 2]
+      );
+      expect([
+        parseInt(batchBalance[0].toString()),
+        parseInt(batchBalance[1].toString()),
+      ]).to.deep.equal([1, 1]);
+    });
+
+    it('PATCHes allow ERC1155 withdrawals (batch)', async () => {
+      if (!goodToGo) throw new Error('server wallet not funded');
+      console.log('withdrawing sft (batch)...');
+
+      let complete;
+      for (let i = 0; i < 5; i++) {
+        if (!complete) {
+          console.log('attempt', i + 1);
+          response = await request(app)
+            .patch('/balance')
+            .set('Cookie', cookies)
+            .send({ network, args: { asset: asset.sftAlt } });
+
+          if (response.status === 200) complete = true;
+          else await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      }
+      expectStatus(response, 200);
+
+      const batchBalance = await contracts.sft.balanceOfBatch(
+        [evm.wallet.address, evm.wallet.address],
+        [1, 2]
+      );
+      expect([
+        parseInt(batchBalance[0].toString()),
+        parseInt(batchBalance[1].toString()),
+      ]).to.deep.equal([0, 0]);
     });
 
     it('Refunds at the end', async () => {
-      if ([funded.gas, funded.tkn, funded.nft, funded.sft].includes(true))
-        console.log(funded);
-
-      const serverSigner = evm.network.signer(network, evm.wallet.key);
       for (let i = 0; i < 5; i++) {
-        if ([funded.gas, funded.tkn, funded.nft, funded.sft].includes(true)) {
+        if (funded.gas) {
           let failed = false;
           console.log('\nrefund attempt', i + 1);
-          if (funded.gas) {
-            try {
-              console.log('retrieving gas...');
-              const estimate = await estimateRawTxFee(provider);
-              const raw = await provider.getBalance(evm.wallet.address);
-              const balance = parseInt(raw.toString());
-              const toRefund = balance - estimate;
 
-              const refund = await serverSigner.sendTransaction({
-                to: deployer.address,
-                value: toRefund,
-              });
-              await refund.wait(2);
-              funded.gas = false;
-            } catch {
-              failed = true;
-            }
-          }
-          if (funded.nft) {
-            try {
-              console.log('retrieving nft...');
-              tx = await new ethers.Contract(
-                asset.nft.contractAddress,
-                require(`./routes/utils/evm/interfaces/ERC721.json`).abi,
-                serverSigner
-              ).transferFrom(
-                deployer.address,
-                evm.wallet.address,
-                asset.nft.value
-              );
-              await tx.wait(2);
-              funded.nft = false;
-            } catch {
-              failed = true;
-            }
-          }
-          if (funded.sft) {
-            try {
-              // BUG || missing feature
-              console.log('retrieving sft...');
-              // const token = new ethers.Contract(
-              //   asset.sft.contractAddress,
-              //   require(`./routes/utils/evm/interfaces/ERC1155.json`).abi,
-              //   serverSigner
-              // )
-              // tx = await contracts.sft.
-              // await tx.wait(2);
-              funded.sft = false;
-            } catch {
-              failed = true;
-            }
+          try {
+            console.log('retrieving gas...');
+            const estimate = await estimateRawTxFee(provider);
+            const raw = await provider.getBalance(evm.wallet.address);
+            const balance = parseInt(raw.toString());
+            const toRefund = balance - estimate;
+
+            const refund = await serverSigner.sendTransaction({
+              to: deployer.address,
+              value: toRefund,
+            });
+            await refund.wait(2);
+            funded.gas = false;
+          } catch {
+            failed = true;
           }
 
           if (failed) await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -1379,17 +1421,11 @@ describe('app', () => {
       }
 
       expect(funded.gas).to.be.false;
-      expect(funded.nft).to.be.false;
-      expect(funded.sft).to.be.false;
     });
   });
 
   context('cleanup', () => {
     it('cleans up after itself', () =>
-      handle.cleanup(
-        evm.wallet.address,
-        funded.gas || funded.nft || funded.sft,
-        anomalous
-      ));
+      handle.cleanup(evm.wallet.address, funded.gas, anomalous));
   });
 });

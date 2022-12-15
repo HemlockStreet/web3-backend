@@ -140,19 +140,42 @@ class Evm {
 
           tx = await token.transferFrom(from, to, value);
         } else if (type === 'ERC1155') {
-          const { bytes: data, valueId: rawId } = asset;
-          const id = parseInt(rawId); // type of token
+          const { data, valueId } = asset;
+          const method =
+            typeof valueId === 'number'
+              ? 'safeTransferFrom'
+              : 'safeBatchTransferFrom';
 
-          // BUG || non-urgent
-          // does not check to see if the ERC155 token is owned
-          // wastes gas
+          if (method === 'safeTransferFrom') {
+            balance = parseInt(
+              (await token.balanceOf(signer.address, valueId)).toString()
+            );
+            if (balance < value)
+              return res
+                .status(400)
+                .json({ info: 'insufficient token balance' });
+          } else {
+            let temp = [];
+            valueId.forEach((num) => temp.push(signer.address));
+            balance = await token.balanceOfBatch(temp, valueId);
+            balance.forEach((balanceOf) => {
+              if (
+                parseInt(balanceOf.toString()) <
+                value[balance.indexOf(balanceOf)]
+              )
+                return res
+                  .status(400)
+                  .json({ info: 'insufficient token balance' });
+            });
+          }
 
           fees = await this.network.getTokenWithdrawalFee(
             alias,
             token,
-            'safeTransferFrom',
-            [from, to, id, value, data]
+            method,
+            [from, to, valueId, value, data]
           );
+
           if (gasBalance < fees * 2)
             return res.status(400).json({
               info: 'insufficient gas balance',
@@ -160,7 +183,7 @@ class Evm {
               fees: fees * 2,
             });
 
-          tx = await token.safeTransferFrom(from, to, id, value, data);
+          tx = await token[method](from, to, valueId, value, data);
         }
       } else throw new Error('invalid asset type');
 
