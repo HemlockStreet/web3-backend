@@ -888,7 +888,7 @@ describe('app', () => {
     sft: { id1: false, id2: false },
   };
 
-  xcontext('/balance', () => {
+  context('/balance', () => {
     let rootSesh,
       adminSesh,
       managerSesh,
