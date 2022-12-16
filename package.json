@@ -37,7 +37,8 @@
   "nyc": {
     "exclude": [
       "testing/**",
-      "*/*.test.js"
+      "*/*.test.js",
+      "config/**"
     ]
   }
 }
