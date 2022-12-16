@@ -2,8 +2,8 @@ const { existsSync, mkdirSync, copyFileSync, rmSync } = require('fs');
 
 const pathTo = {
   dust: './testing/dust',
-  evm: './routes/utils/evm',
-  AccessController: './routes/utils/AccessController',
+  evm: './lib/utils/evm',
+  Auth: './lib/utils/Auth',
 };
 
 if (!existsSync(pathTo.dust))
@@ -19,12 +19,12 @@ module.exports = (address, funded, active) => {
     );
 
   [
-    'AccessController/EncryptionTokens',
-    'AccessController/SessionData',
+    'Auth/EncryptionTokens',
+    'Auth/SessionData',
     'evm/WalletConfig',
     'evm/ChainConfig',
   ].forEach((file) => {
-    const pathTo = `./routes/utils/${file}.json`;
+    const pathTo = `./lib/utils/${file}.json`;
     if (existsSync(pathTo)) rmSync(pathTo);
   });
 

@@ -1,10 +1,10 @@
 const { existsSync, writeFileSync } = require('fs');
 const ethers = require('ethers');
-const Evm = require('../../routes/utils/evm');
-const AccessController = require('../../routes/utils/AccessController');
+const Ethereum = require('../../lib/utils/evm');
+const Auth = require('../../lib/utils/Auth');
 
-const evm = new Evm();
-const ctrl = new AccessController();
+const evm = new Ethereum();
+const auth = new Auth();
 const provider = evm.network.provider('polygonMumbai');
 const newWallet = () => {
   const wallet = ethers.Wallet.createRandom();
@@ -42,7 +42,7 @@ const wallets = require('../wallets/testWallets.json').data.map(
 );
 
 module.exports = {
-  ctrl,
+  auth,
   evm,
   deployer,
   wallets,
