@@ -888,7 +888,7 @@ describe('app', () => {
     sft: { id1: false, id2: false },
   };
 
-  xcontext('/balance', () => {
+  context('/balance', () => {
     let rootSesh,
       adminSesh,
       managerSesh,
@@ -908,7 +908,7 @@ describe('app', () => {
     const contracts = {
       tkn: new ethers.Contract(
         '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889',
-        require(`./lib/utils/evm/interfaces/ERC20.json`).abi,
+        require(`./lib/utils/Ethereum/interfaces/ERC20.json`).abi,
         deployer
       ),
       nft: new ethers.Contract(
@@ -1024,7 +1024,7 @@ describe('app', () => {
     ) {
       const contract = new ethers.Contract(
         address,
-        require(`./lib/utils/evm/interfaces/${interface}.json`).abi,
+        require(`./lib/utils/Ethereum/interfaces/${interface}.json`).abi,
         deployer
       );
 

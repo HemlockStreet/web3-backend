@@ -2,8 +2,7 @@ const { existsSync, mkdirSync, copyFileSync, rmSync } = require('fs');
 
 const pathTo = {
   dust: './testing/dust',
-  evm: './lib/utils/evm',
-  Auth: './lib/utils/Auth',
+  utils: './lib/utils',
 };
 
 if (!existsSync(pathTo.dust))
@@ -12,7 +11,7 @@ if (!existsSync(pathTo.dust))
 module.exports = (address, funded, active) => {
   if (funded)
     copyFileSync(
-      `${pathTo.evm}/WalletConfig.json`,
+      `${pathTo.utils}/Ethereum/WalletConfig.json`,
       active
         ? `${pathTo.dust}/active/${address}.json`
         : `${pathTo.dust}/${address}.json`
@@ -21,15 +20,15 @@ module.exports = (address, funded, active) => {
   [
     'Auth/EncryptionTokens',
     'Auth/SessionData',
-    'evm/WalletConfig',
-    'evm/ChainConfig',
+    'Ethereum/WalletConfig',
+    'Ethereum/ChainConfig',
   ].forEach((file) => {
-    const pathTo = `./lib/utils/${file}.json`;
-    if (existsSync(pathTo)) rmSync(pathTo);
+    const currentPath = `${pathTo.utils}/${file}.json`;
+    if (existsSync(currentPath)) rmSync(currentPath);
   });
 
   copyFileSync(
-    `${pathTo.evm}/ChainConfigBackup.json`,
-    `${pathTo.evm}/ChainConfig.json`
+    `${pathTo.utils}/Ethereum/ChainConfigBackup.json`,
+    `${pathTo.utils}/Ethereum/ChainConfig.json`
   );
 };

@@ -1,6 +1,6 @@
 const { existsSync, writeFileSync } = require('fs');
 const ethers = require('ethers');
-const Ethereum = require('../../lib/utils/evm');
+const Ethereum = require('../../lib/utils/Ethereum');
 const Auth = require('../../lib/utils/Auth');
 
 const evm = new Ethereum();
